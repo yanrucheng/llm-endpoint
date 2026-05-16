@@ -105,7 +105,7 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 | P2F public invocation facade | `llm_endpoint.invocation.invoke_plan` validates canonical direct invocation input, handles operation invocation IDs, resolves registry/policy/schema refs, and returns a no-provider-call `InvocationPlan` or typed failure. |
 | P2G offline smoke API shell | `llm_endpoint.smoke.run_offline_smoke` returns a machine-readable `OfflineSmokeReport` for config, registry, invocation planning, and telemetry checks without network calls or secret resolution. |
 | Zero BC policy | New public surfaces are direct `v1` clean-slate contracts; no version routers, deprecated fields, compatibility adapters, or legacy precedence paths were added. |
-| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `37 passed`. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `41 passed`. |
 
 ## Phase 3: Execution Components
 
