@@ -28,6 +28,9 @@ def test_manifest_surfaces_are_owned() -> None:
     assert "llm_endpoint.adapters" in names
     assert "llm_endpoint.router" in names
     assert "llm_endpoint.fixtures" in names
+    assert "llm_endpoint.migration" in names
+    assert "llm_endpoint.rollout" in names
+    assert "llm_endpoint.release_guard" in names
 
 
 def test_manifest_uses_zero_bc() -> None:

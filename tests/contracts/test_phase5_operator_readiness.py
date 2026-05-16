@@ -1,0 +1,193 @@
+from llm_endpoint.config import (
+    EndpointConfig,
+    EndpointPool,
+    LLMEndpointConfig,
+    OperationConfig,
+    OperationRuntimePolicy,
+    ProviderFormat,
+    RoleConfig,
+    StructuredOutputMode,
+)
+from llm_endpoint.invocation import InvocationPlan, InvocationRequest, invoke_plan
+from llm_endpoint.migration import DirectMigrationRequest, assess_direct_migration
+from llm_endpoint.public_surface import PUBLIC_SURFACES
+from llm_endpoint.release_guard import (
+    CompatibilityIssueCode,
+    capture_public_surface_baseline,
+    check_public_surface_release,
+)
+from llm_endpoint.results import FailureCode, TypedFailure
+from llm_endpoint.rollout import (
+    RolloutControls,
+    RolloutDecision,
+    apply_rollout_controls,
+    policy_fingerprint_key,
+)
+
+
+def test_phase_5a_direct_migration_delegates_to_canonical_invocation() -> None:
+    report = assess_direct_migration(
+        migration_request=DirectMigrationRequest(
+            request=_request("inv-p5a"),
+            source_callsite="nightfall.writer.draft",
+        ),
+        config=_config(),
+    )
+
+    assert report.ok is True
+    assert report.plan is not None
+    assert report.plan.operation_invocation_id == "inv-p5a"
+    assert report.diagnostics == ("canonical_direct_api_ready", "no_compatibility_facade")
+
+
+def test_phase_5a_rejects_legacy_nightfall_fields_under_zero_bc() -> None:
+    report = assess_direct_migration(
+        migration_request=DirectMigrationRequest(
+            request=_request("inv-p5a-legacy"),
+            source_callsite="nightfall.writer.legacy",
+            legacy_fields={"provider": "openai", "model": "legacy-model"},
+        ),
+        config=_config(),
+    )
+
+    assert report.ok is False
+    assert isinstance(report.failure, TypedFailure)
+    assert report.failure.code is FailureCode.INVALID_INVOCATION
+    assert report.failure.diagnostics.safe_context["legacy_field_count"] == "2"
+
+
+def test_phase_5b_rollout_controls_suppress_and_label_canaries() -> None:
+    plan = _plan("inv-p5b")
+    controls = RolloutControls(
+        disabled_endpoint_uids=frozenset({"primary"}),
+        canary_roles=frozenset({"writer"}),
+        canary_operations=frozenset({"draft"}),
+        expected_policy_fingerprints={
+            policy_fingerprint_key("writer", "draft"): plan.policy_fingerprint
+        },
+    )
+
+    decision = apply_rollout_controls(plan=plan, controls=controls)
+
+    assert isinstance(decision, RolloutDecision)
+    assert decision.plan.endpoint_uids == ("primary", "fallback")
+    assert decision.suppressed_endpoint_reasons == {"primary": "rollout_disabled"}
+    assert decision.canary_id == "writer:draft"
+    assert decision.policy_fingerprint_matches is True
+
+
+def test_phase_5b_force_candidate_requires_test_mode() -> None:
+    plan = _plan("inv-p5b-force")
+
+    result = apply_rollout_controls(
+        plan=plan,
+        controls=RolloutControls(forced_endpoint_uid="fallback"),
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.INVALID_INVOCATION
+
+
+def test_phase_5b_force_candidate_rewrites_plan_in_test_mode() -> None:
+    plan = _plan("inv-p5b-test-force")
+
+    decision = apply_rollout_controls(
+        plan=plan,
+        controls=RolloutControls(forced_endpoint_uid="fallback", test_mode=True),
+    )
+
+    assert isinstance(decision, RolloutDecision)
+    assert decision.plan.endpoint_uids == ("fallback",)
+
+
+def test_phase_5c_release_guard_accepts_documented_zero_bc_surface_diff() -> None:
+    current = PUBLIC_SURFACES
+    baseline = tuple(
+        surface
+        for surface in capture_public_surface_baseline(current)
+        if surface.name != "llm_endpoint.release_guard"
+    )
+
+    report = check_public_surface_release(
+        current_surfaces=current,
+        baseline=baseline,
+        changelog_entries=("public surface: add compatibility checker",),
+        migration_notes=("zero bc: consumers use the current checker directly",),
+        package_version="0.1.0",
+    )
+
+    assert report.ok is True
+    assert report.issues == ()
+
+
+def test_phase_5c_release_guard_requires_changelog_and_migration_notes() -> None:
+    baseline = tuple(
+        surface
+        for surface in capture_public_surface_baseline(PUBLIC_SURFACES)
+        if surface.name != "llm_endpoint.rollout"
+    )
+
+    report = check_public_surface_release(
+        current_surfaces=PUBLIC_SURFACES,
+        baseline=baseline,
+        package_version="0.1.0",
+    )
+    codes = {issue.code for issue in report.issues}
+
+    assert report.ok is False
+    assert CompatibilityIssueCode.PUBLIC_SURFACE_ADDED in codes
+    assert CompatibilityIssueCode.MISSING_CHANGELOG in codes
+    assert CompatibilityIssueCode.MISSING_MIGRATION_NOTE in codes
+
+
+def _request(operation_invocation_id: str) -> InvocationRequest:
+    return InvocationRequest(
+        role="writer",
+        operation_ref="draft",
+        messages=({"role": "user", "content": "draft this"},),
+        deadline_ms=10_000,
+        operation_invocation_id=operation_invocation_id,
+    )
+
+
+def _plan(operation_invocation_id: str) -> InvocationPlan:
+    result = invoke_plan(request=_request(operation_invocation_id), config=_config())
+
+    assert isinstance(result, InvocationPlan)
+    return result
+
+
+def _config(schema_ref: str | None = "schema://draft/v1") -> LLMEndpointConfig:
+    return LLMEndpointConfig(
+        endpoints=(
+            EndpointConfig(
+                uid="primary",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-primary",
+                capability_refs=("cap.fake.structured",),
+            ),
+            EndpointConfig(
+                uid="fallback",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-fallback",
+            ),
+        ),
+        roles=(RoleConfig(name="writer", pool=EndpointPool(("primary", "fallback"))),),
+        operations=(
+            OperationConfig(ref="draft", policy_ref="draft-policy", schema_contract_ref=schema_ref),
+        ),
+        policies=(
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=10_000,
+                max_output_tokens=1_024,
+                candidate_budget_ms=4_000,
+                failover_reserve_ms=1_000,
+                structured_output_mode=StructuredOutputMode.JSON_SCHEMA,
+            ),
+        ),
+    )

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase4cde"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase5abc"
 
 
 class CompatibilityLevel(StrEnum):
@@ -33,6 +33,9 @@ class SurfaceKind(StrEnum):
     FAKE_PROVIDER_HARNESS = "fake_provider_harness"
     ROLE_HEALTH = "role_health"
     DEBUG_REPLAY = "debug_replay"
+    MIGRATION_READINESS = "migration_readiness"
+    ROLLOUT_CONTROLS = "rollout_controls"
+    RELEASE_GUARD = "release_guard"
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +247,57 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         negative_fixture=(
             "tests/contracts/test_phase4_invocation_hardening.py::"
             "test_phase_4e_debug_replay_rejects_forbidden_fields"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.migration",
+        kind=SurfaceKind.MIGRATION_READINESS,
+        owner="migration-owner",
+        version_rule=(
+            "Migration readiness v1 is direct API only; compatibility facades and "
+            "legacy provider tuple adapters are prohibited."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5a_direct_migration_delegates_to_canonical_invocation"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5a_rejects_legacy_nightfall_fields_under_zero_bc"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.rollout",
+        kind=SurfaceKind.ROLLOUT_CONTROLS,
+        owner="operations-owner",
+        version_rule=(
+            "Rollout controls v1 operate on current endpoint UIDs and policy fingerprints "
+            "only; no legacy rollout gates."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5b_rollout_controls_suppress_and_label_canaries"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5b_force_candidate_requires_test_mode"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.release_guard",
+        kind=SurfaceKind.RELEASE_GUARD,
+        owner="module-maintainer",
+        version_rule=(
+            "Compatibility checker enforces Zero BC release evidence and rejects "
+            "non-Zero-BC public surfaces."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5c_release_guard_accepts_documented_zero_bc_surface_diff"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5c_release_guard_requires_changelog_and_migration_notes"
         ),
     ),
 )
