@@ -60,7 +60,7 @@ Module-owned guarantees:
 
 - Offline validation runs without network or credentials.
 - Consumer contract cases cover config validation, failure taxonomy, telemetry
-  redaction, structured output, pool simulation, plain text, and facade parity.
+  redaction, structured output, pool simulation, plain text, and direct migration.
 - Optional live smoke requires explicit consent and emits typed skipped, passed,
   or failed outcomes.
 

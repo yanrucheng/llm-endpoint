@@ -1,5 +1,5 @@
 {
-  "area": "facade_parity",
+  "area": "direct_migration",
   "polarity": "negative",
   "source_callsite": "nightfall.writer.legacy",
   "legacy_fields": [

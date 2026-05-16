@@ -308,7 +308,7 @@ Every invocation-related event must carry operation invocation ID, role, operati
 | Structured output | Extraction mode, refusal, malformed payload, duplicate terminal tool, wrong tool, and schema violation fixtures. |
 | Router | Retryable failover, non-retryable fail-fast, suppression skip, no eligible candidate, pool exhaustion, and deadline reserve fixtures. |
 | Redaction | Golden event/artifact fixtures proving forbidden fields are absent. |
-| Migration extraction | Direct-API migration guide and consumer contract fixtures; no facade parity requirement. |
+| Migration extraction | Direct-API migration guide and consumer contract fixtures; no compatibility facade or facade-parity requirement. |
 
 ## Infrastructure Topology
 

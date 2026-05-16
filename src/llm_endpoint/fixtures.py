@@ -21,7 +21,7 @@ class FixtureArea(StrEnum):
     STRUCTURED_OUTPUT = "structured_output"
     ADAPTER_PARITY = "adapter_parity"
     PLAIN_TEXT = "plain_text"
-    FACADE_PARITY = "facade_parity"
+    DIRECT_MIGRATION = "direct_migration"
 
 
 class ConsumerContractArea(StrEnum):
@@ -33,7 +33,7 @@ class ConsumerContractArea(StrEnum):
     STRUCTURED_OUTPUT = "structured_output"
     POOL_SIMULATION = "pool_simulation"
     PLAIN_TEXT = "plain_text"
-    FACADE_PARITY = "facade_parity"
+    DIRECT_MIGRATION = "direct_migration"
 
 
 class FixturePolarity(StrEnum):
@@ -217,17 +217,17 @@ CONTRACT_FIXTURES: tuple[ContractFixture, ...] = (
         owner="api-owner",
     ),
     ContractFixture(
-        area=FixtureArea.FACADE_PARITY,
+        area=FixtureArea.DIRECT_MIGRATION,
         polarity=FixturePolarity.POSITIVE,
         name="direct_migration_parity",
-        path="tests/fixtures/contracts/facade_parity/direct_migration.json",
+        path="tests/fixtures/contracts/direct_migration/direct_migration.json",
         owner="migration-owner",
     ),
     ContractFixture(
-        area=FixtureArea.FACADE_PARITY,
+        area=FixtureArea.DIRECT_MIGRATION,
         polarity=FixturePolarity.NEGATIVE,
         name="legacy_fields_rejected",
-        path="tests/fixtures/contracts/facade_parity/legacy_fields_rejected.json",
+        path="tests/fixtures/contracts/direct_migration/legacy_fields_rejected.json",
         owner="migration-owner",
     ),
 )
@@ -283,9 +283,9 @@ CONSUMER_CONTRACT_CASES: tuple[ConsumerContractCase, ...] = (
         owner="api-owner",
     ),
     ConsumerContractCase(
-        area=ConsumerContractArea.FACADE_PARITY,
+        area=ConsumerContractArea.DIRECT_MIGRATION,
         name="direct_migration_parity",
-        fixture_path="tests/fixtures/contracts/facade_parity/direct_migration.json",
+        fixture_path="tests/fixtures/contracts/direct_migration/direct_migration.json",
         test_selector=(
             "tests/contracts/test_phase5_operator_readiness.py::"
             "test_phase_5a_direct_migration_delegates_to_canonical_invocation"

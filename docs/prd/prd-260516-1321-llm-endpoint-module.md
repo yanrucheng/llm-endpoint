@@ -17,7 +17,7 @@ source: "/Users/chengyanru/repos/venture/lg/nightfall-ai/docs/external/external-
 
 ## Context / Problem
 
-The LLM endpoint code started as a Nightfall AI internal boundary for selecting providers, validating endpoint configuration, enforcing structured output, and making model calls observable. It is now used by Nightfall AI plus at least two additional repositories. That changes the product: the module is no longer a local helper. It is a standalone infrastructure dependency with real consumers, upgrade risk, operator expectations, and compatibility obligations.
+The LLM endpoint code started as a Nightfall AI internal boundary for selecting providers, validating endpoint configuration, enforcing structured output, and making model calls observable. It is now used by Nightfall AI plus at least two additional repositories. That changes the product: the module is no longer a local helper. It is a standalone infrastructure dependency with real consumers, upgrade risk, operator expectations, and explicit Zero BC release discipline before production.
 
 The reviewed direction is correct: the module should not be a thin wrapper around provider SDKs. It should be the shared model-execution boundary where host applications express intent and the module owns provider execution safety.
 
@@ -182,21 +182,21 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 | Manual/TTL endpoint suppression and force-candidate testing controls | Hidden adaptive routing or silent role remapping |
 | Redacted telemetry events, request correlation, attempt traces, token usage when available, and smoke reports | Raw prompt/response logging, credential logging, or vendor-specific dashboard coupling |
 | Offline validation, fake provider harness, and opt-in live smoke using production-equivalent registry paths | Mandatory live calls in CI or local development |
-| V1 public API definition, compatibility rules, migration bridge, and contract tests | Permanent compatibility for legacy construction helpers |
+| V1 public API definition, Zero BC release rules, direct-migration checks, and contract tests | Permanent compatibility for legacy construction helpers |
 
 ## Assumptions
 
 | Assumption | Impact |
 |---|---|
-| The module already has three or more real repository consumers | Backward compatibility is now a product requirement for documented public surfaces |
+| The module already has three or more real repository consumers | Public-surface ownership, fixtures, changelog evidence, and direct migration notes are required even under Zero BC |
 | Consumers can migrate toward role + operation invocation | Raw provider tuple construction is not a permanent public API |
 | Different repos may share providers, gateways, and quotas | Telemetry, token usage, and failure classes must be normalized across repos |
 | Provider behavior differs by gateway and model family even when SDK shape looks similar | Provider format and model family remain separate concepts |
 | Local development and CI may not have provider credentials | Offline validation and fake providers must be first-class |
 | Each consumer owns its domain schema and business validation | The module validates transport/structure and hands off to caller-provided validators |
 | Repo-local eval evidence can conflict across consumers | Evidence informs policy values but must not become hidden module behavior |
-| Nightfall currently needs adapter ergonomics during migration | A thin adapter is V1, but direct invocation remains canonical |
-| Streaming behavior is product-sensitive | V1 must explicitly include, exclude, or facade-gate streaming instead of leaving it ambiguous |
+| Nightfall currently needs migration ergonomics | Direct-migration readiness checks are V1; compatibility adapters are prohibited |
+| Streaming behavior is product-sensitive | V1 must explicitly exclude streaming from the direct API unless a future Zero BC replacement adds it |
 
 ## Terminology
 
@@ -223,7 +223,7 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 | Attempt trace | Redacted per-candidate execution record for diagnostics |
 | Fake provider | Deterministic provider harness used for conformance, failure, timeout, and fallback tests |
 | Role health | Queryable status summarizing whether a role is available, degraded, suppressed, uncertified, missing secrets, failing smoke, or fallback-only |
-| Public API | Names, types, config schema, error codes, telemetry fields, validation APIs, shipped facade behavior, and documented CLI behavior guaranteed by compatibility policy |
+| Public API | Names, types, config schema, error codes, telemetry fields, validation APIs, direct-migration checks, and documented CLI behavior governed by Zero BC policy |
 | Internal | Implementation detail that may change without compatibility guarantees |
 
 ## Product Principles
@@ -545,8 +545,8 @@ V1 must not leave streaming ambiguous.
 
 | Mode | V1 stance |
 |---|---|
-| Structured-output streaming | Not part of V1 success contract unless a host explicitly ships a facade with documented limitations |
-| Plain visible-text streaming | Allowed only through a documented facade or adapter path; direct API may remain non-streaming |
+| Structured-output streaming | Not part of the V1 success contract |
+| Plain visible-text streaming | Host-owned outside the module; the V1 direct API is non-streaming |
 | Progress events | Host-owned UX; module telemetry must not be treated as user-visible progress |
 | Partial output validation | Not success until final output passes the operation's result contract |
 | Provider stream failure | Normalized into typed failure with redacted attempt trace |
@@ -767,7 +767,7 @@ Every typed failure includes, when applicable:
 - [design-260515-1305-agentic-deadline-failover](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/docs/design/design-260515-1305-agentic-deadline-failover.md) - deadline-aware failover design.
 - [design-260516-0400-agentic-runtime-budget-contract](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/docs/design/design-260516-0400-agentic-runtime-budget-contract.md) - runtime budget contract design generalized here as operation runtime policy.
 - [260516-1236 standalone feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1236-standalone-llm-endpoint-feedback/report.md) - review feedback requiring strict V1 cut, fake providers, request correlation, secret resolver, and role health.
-- [260516-1245 module feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1245-llm-endpoint-module-feedback/report.md) - review feedback requiring migration bridge, conformance tests, config precedence, rollout controls, circuit breaker, cost/token guardrails, async/cancellation, streaming boundary, and debug replay artifacts.
+- [260516-1245 module feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1245-llm-endpoint-module-feedback/report.md) - review feedback requiring the later-rejected migration-bridge proposal, conformance tests, config precedence, rollout controls, circuit breaker, cost/token guardrails, async/cancellation, streaming boundary, and debug replay artifacts.
 - [260516-1301 V1 feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1301-llm-endpoint-v1-feedback/report.md) - review feedback requiring layered V1 scope, cleaner precedence, schema resolver boundary, suppression-as-routing-reason, deterministic role health, and later-superseded migration-facade analysis.
 
 ## Open Questions

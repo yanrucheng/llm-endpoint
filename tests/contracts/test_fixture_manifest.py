@@ -48,7 +48,7 @@ def test_consumer_contract_pack_covers_phase_5d_areas() -> None:
 
 
 def test_consumer_contract_pack_has_area_lookup() -> None:
-    cases = consumer_contract_cases_by_area(ConsumerContractArea.FACADE_PARITY)
+    cases = consumer_contract_cases_by_area(ConsumerContractArea.DIRECT_MIGRATION)
 
     assert len(cases) == 1
     assert cases[0].name == "direct_migration_parity"

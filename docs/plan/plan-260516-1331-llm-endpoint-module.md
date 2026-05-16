@@ -166,7 +166,7 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 
 | Track | Components / Contracts | Owner | Deliverables | Dev Units | Depends On |
 |---|---|---|---|---:|---|
-| P5A | Migration Extraction | Migration owner | Direct-API migration guide, consumer call-site checklist, version-pin rollback steps, fixture parity requirements | 3 | P4 Gate |
+| P5A | Migration Extraction | Migration owner | Direct-API migration guide, consumer call-site checklist, version-pin rollback steps, direct-migration fixture proof | 3 | P4 Gate |
 | P5B | Rollout Controls | Operations owner | Enable/disable by UID, force candidate in test mode, canary identification by role/operation, policy fingerprint comparison | 2 | P4 Gate |
 | P5C | Zero BC Guard | Module maintainer | Public surface checks for API/config/telemetry/failure taxonomy plus shim/legacy-route rejection | 2 | P4 Gate |
 | P5D | Consumer Contract Test Pack | Test owner | Installable fixtures for config validation, failure taxonomy, telemetry redaction, structured output, pool simulation, plain text, and direct-API parity | 3 | P4 Gate |
@@ -176,6 +176,19 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 **Gate:** A consuming repo can pin the module, configure roles/operations, run offline validation and contract tests without credentials, exercise fake-provider failure cases, query role health, inspect safe debug artifacts, and roll out or roll back via documented steps.
 
 **Failure blocker:** Production-default adoption remains blocked if direct-API migration parity, rollout controls, Zero BC checks, consumer contract pack, adoption guide, or optional live smoke boundary is missing or unredacted.
+
+**P5 Gate status:** Passed on 2026-05-16. Operator readiness, consumer adoption artifacts, release guarding, Zero BC enforcement, and optional live-smoke boundaries are verified by Phase 5 contract tests and the final quality gate.
+
+| Check | Evidence |
+|---|---|
+| P5A direct migration extraction | `llm_endpoint.migration.assess_direct_migration` delegates to the canonical invocation API and rejects legacy provider/model tuple fields under Zero BC. |
+| P5B rollout controls | `llm_endpoint.rollout.apply_rollout_controls` supports UID suppression, canary labeling, policy fingerprint comparison, and forced candidates only in test mode. |
+| P5C Zero BC release guard | `llm_endpoint.release_guard.check_public_surface_release` rejects non-Zero-BC surfaces and requires changelog plus Zero BC migration-note evidence for public-surface changes. |
+| P5D consumer contract pack | `llm_endpoint.fixtures.build_consumer_contract_pack` covers config validation, failure taxonomy, telemetry redaction, structured output, pool simulation, plain text, and direct migration. |
+| P5E adoption guide | `docs/plan/phase-5e-extraction-adoption-guide.md` documents pinning, host responsibilities, rollout levers, rollback levers, and non-V1 exclusions with Zero BC policy. |
+| P5F optional live smoke | `llm_endpoint.smoke.run_optional_live_smoke` requires explicit consent, uses a safe minimal payload, and reports typed skipped, passed, or failed outcomes. |
+| Zero BC quality check | Renamed the remaining legacy facade-named fixture area to `direct_migration`; no compatibility-facade fixture area remains. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `81 passed`. |
 
 ## Summary Table
 
@@ -294,6 +307,7 @@ graph LR
 
 | Date | Change |
 |---|---|
+| 2026-05-16 | Passed Phase 5 final gate by verifying direct migration, rollout controls, Zero BC release guard, consumer contract pack, adoption guide, optional live smoke, and final quality checks. |
 | 2026-05-16 | Passed Phase 4 gate by verifying plain-text invocation, cancellation and late-response semantics, deterministic fake-provider scenarios, role health, debug replay artifacts, and Zero BC public surface coverage. |
 | 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning facade, offline smoke API shell, and contract coverage. |
 | 2026-05-16 | Passed Phase 1 gate, added gate evidence, and aligned the plan to Zero BC with no migration facade. |
