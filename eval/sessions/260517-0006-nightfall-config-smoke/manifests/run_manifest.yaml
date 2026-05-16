@@ -1,0 +1,19 @@
+session_id: 260517-0006-nightfall-config-smoke
+task_type: consumer-config-smoke
+dataset:
+  name: nightfall-ai-llm-endpoints-test-config
+  location: config/llm-endpoints.yaml
+  fingerprint: local-credential-file-gitignored
+runner:
+  entrypoint: manual loader probe plus module ingestion probe
+  commit: "0ca6466"
+parameters:
+  source_config: /Users/chengyanru/repos/venture/lg/nightfall-ai/config/llm-endpoints.yaml
+  local_copy: config/llm-endpoints.yaml
+  git_policy: local_copy_ignored
+  module_smoke_api: llm_endpoint.smoke.run_offline_smoke
+outputs:
+  directory: eval/sessions/260517-0006-nightfall-config-smoke/outputs
+  raw_artifacts: local-only
+decision:
+  report: report.md

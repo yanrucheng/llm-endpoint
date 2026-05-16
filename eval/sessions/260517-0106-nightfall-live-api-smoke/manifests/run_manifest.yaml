@@ -1,0 +1,19 @@
+session_id: 260517-0106-nightfall-live-api-smoke
+task_type: live-provider-smoke
+dataset:
+  name: nightfall-ai-local-test-llm-endpoints
+  location: config/llm-endpoints.yaml
+  fingerprint: local-credential-file-gitignored
+runner:
+  entrypoint: eval/sessions/260517-0106-nightfall-live-api-smoke/run.py
+  commit: "0ca6466"
+parameters:
+  prompt_sha256: "d3e9ca8a6a2272d039e6ee3bed7bb971a40f23e8d81881e6c13ebe5930274776"
+  timeout_sec: 60.0
+  max_tokens: 16
+outputs:
+  directory: eval/sessions/260517-0106-nightfall-live-api-smoke/outputs
+  primary_metrics: metrics/summary.json
+  primary_results: outputs/results.jsonl
+decision:
+  report: report.md

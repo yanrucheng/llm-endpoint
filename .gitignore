@@ -206,6 +206,9 @@ cython_debug/
 # .vscode/
 /.trae/
 
+# Local test LLM endpoint credentials
+config/llm-endpoints.yaml
+
 # Eval session raw outputs
 eval/**/outputs/*
 !eval/**/outputs/.gitkeep
