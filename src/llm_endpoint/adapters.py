@@ -1,14 +1,15 @@
-"""Provider adapter extension contracts and normalized outcomes."""
+"""Provider adapter extension contracts, execution, and normalized outcomes."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, Protocol
 
+from llm_endpoint.callbacks import SecretResolutionStatus, SecretResolver, SecretValue
 from llm_endpoint.config import ProviderFormat, StructuredOutputMode
-from llm_endpoint.results import FailureCode
+from llm_endpoint.results import FailureCode, TypedFailure, failure
 from llm_endpoint.telemetry import TokenUsage, forbidden_attribute_keys
 
 PROVIDER_ADAPTER_CONTRACT_VERSION = "v1"
@@ -43,6 +44,7 @@ class AdapterInvocationPlan:
     candidate_budget_ms: int
     schema_mode: StructuredOutputMode = StructuredOutputMode.NONE
     credential_ref: str | None = None
+    credential: SecretValue | None = None
     schema_contract_ref: str | None = None
     policy_fingerprint: str | None = None
     request_metadata: Mapping[str, str] = field(default_factory=dict)
@@ -112,6 +114,38 @@ class ProviderAdapter(Protocol):
     def invoke(self, plan: AdapterInvocationPlan) -> ProviderOutcome: ...
 
 
+@dataclass(slots=True)
+class FakeProviderAdapter:
+    """Deterministic provider-format adapter for offline execution contracts."""
+
+    outcomes_by_endpoint: Mapping[str, Sequence[ProviderOutcome]]
+    provider_format: ProviderFormat = field(default=ProviderFormat.FAKE, init=False)
+    calls_by_endpoint: dict[str, int] = field(default_factory=dict, init=False)
+
+    def invoke(self, plan: AdapterInvocationPlan) -> ProviderOutcome:
+        if plan.provider_format is not ProviderFormat.FAKE:
+            return provider_failure(
+                kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
+                endpoint_uid=plan.endpoint_uid,
+                elapsed_ms=0,
+                failure_code=FailureCode.UNSUPPORTED_PROVIDER,
+                safe_provider_status={"adapter": "fake_provider_format_mismatch"},
+            )
+
+        outcomes = self.outcomes_by_endpoint.get(plan.endpoint_uid, ())
+        call_index = self.calls_by_endpoint.get(plan.endpoint_uid, 0)
+        self.calls_by_endpoint[plan.endpoint_uid] = call_index + 1
+        if call_index >= len(outcomes):
+            return provider_failure(
+                kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
+                endpoint_uid=plan.endpoint_uid,
+                elapsed_ms=0,
+                failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+                safe_provider_status={"adapter": "fake_outcome_missing"},
+            )
+        return outcomes[call_index]
+
+
 def provider_success(
     *,
     endpoint_uid: str,
@@ -159,3 +193,110 @@ def provider_failure(
         safe_provider_status=safe_provider_status or {},
         token_usage=token_usage,
     )
+
+
+def execute_provider_attempt(
+    *,
+    plan: AdapterInvocationPlan,
+    adapter: ProviderAdapter,
+    secret_resolver: SecretResolver | None = None,
+) -> ProviderOutcome | TypedFailure:
+    """Resolve credentials, invoke one adapter, and keep raw provider errors private."""
+
+    credential_or_failure = _resolve_credential(plan, secret_resolver)
+    if isinstance(credential_or_failure, TypedFailure):
+        return credential_or_failure
+
+    resolved_plan = (
+        replace(plan, credential=credential_or_failure)
+        if credential_or_failure is not None
+        else plan
+    )
+    if adapter.provider_format is not resolved_plan.provider_format:
+        return failure(
+            code=FailureCode.UNSUPPORTED_PROVIDER,
+            message="adapter provider_format does not match endpoint provider_format",
+            operation_invocation_id=resolved_plan.operation_invocation_id,
+            endpoint_uid=resolved_plan.endpoint_uid,
+            policy_fingerprint=resolved_plan.policy_fingerprint,
+        )
+
+    try:
+        outcome = adapter.invoke(resolved_plan)
+    except Exception as exc:  # pragma: no cover - adapter implementation is external.
+        return provider_failure(
+            kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
+            endpoint_uid=resolved_plan.endpoint_uid,
+            elapsed_ms=0,
+            failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            safe_provider_status={"adapter_exception": exc.__class__.__name__},
+        )
+
+    if outcome.endpoint_uid != resolved_plan.endpoint_uid:
+        return failure(
+            code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            message="adapter returned outcome for a different endpoint_uid",
+            operation_invocation_id=resolved_plan.operation_invocation_id,
+            endpoint_uid=resolved_plan.endpoint_uid,
+            policy_fingerprint=resolved_plan.policy_fingerprint,
+        )
+    return outcome
+
+
+def _resolve_credential(
+    plan: AdapterInvocationPlan,
+    secret_resolver: SecretResolver | None,
+) -> SecretValue | None | TypedFailure:
+    if plan.credential_ref is None:
+        return None
+    if secret_resolver is None:
+        return failure(
+            code=FailureCode.MISSING_SECRET,
+            message="secret resolver is required for endpoint credential_ref",
+            operation_invocation_id=plan.operation_invocation_id,
+            endpoint_uid=plan.endpoint_uid,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={"secret_ref": plan.credential_ref},
+        )
+
+    try:
+        resolution = secret_resolver(plan.credential_ref)
+    except Exception as exc:  # pragma: no cover - callback implementation is host-owned.
+        return failure(
+            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            message="secret resolver raised during credential resolution",
+            operation_invocation_id=plan.operation_invocation_id,
+            endpoint_uid=plan.endpoint_uid,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={
+                "secret_ref": plan.credential_ref,
+                "resolver_exception": exc.__class__.__name__,
+            },
+        )
+    if resolution.ref != plan.credential_ref:
+        return failure(
+            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            message="secret resolver returned a mismatched ref",
+            operation_invocation_id=plan.operation_invocation_id,
+            endpoint_uid=plan.endpoint_uid,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={
+                "expected_secret_ref": plan.credential_ref,
+                "actual_secret_ref": resolution.ref,
+            },
+        )
+    if resolution.status is not SecretResolutionStatus.RESOLVED:
+        return resolution.to_failure(
+            operation_invocation_id=plan.operation_invocation_id,
+            endpoint_uid=plan.endpoint_uid,
+        )
+    if resolution.secret is None:
+        return failure(
+            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            message="secret resolver returned resolved status without a secret",
+            operation_invocation_id=plan.operation_invocation_id,
+            endpoint_uid=plan.endpoint_uid,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={"secret_ref": plan.credential_ref},
+        )
+    return resolution.secret

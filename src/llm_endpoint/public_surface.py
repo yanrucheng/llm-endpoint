@@ -27,6 +27,7 @@ class SurfaceKind(StrEnum):
     POLICY_RESOLVER = "policy_resolver"
     HOST_CALLBACK = "host_callback"
     PROVIDER_ADAPTER = "provider_adapter"
+    ROUTER = "router"
     FIXTURE_SCHEMA = "fixture_schema"
 
 
@@ -155,6 +156,16 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         ),
         positive_fixture="tests/contracts/test_adapters_contract.py::test_provider_success_contract",
         negative_fixture="tests/contracts/test_adapters_contract.py::test_raw_provider_status_fields_are_rejected",
+    ),
+    PublicSurface(
+        name="llm_endpoint.router",
+        kind=SurfaceKind.ROUTER,
+        owner="runtime-owner",
+        version_rule=(
+            "Deadline pool router v1 is clean-slate; no legacy routing or fallback modes."
+        ),
+        positive_fixture="tests/contracts/test_router_contract.py::test_ordered_retryable_failover",
+        negative_fixture="tests/contracts/test_router_contract.py::test_pool_exhaustion_is_typed_failure",
     ),
     PublicSurface(
         name="llm_endpoint.fixtures",

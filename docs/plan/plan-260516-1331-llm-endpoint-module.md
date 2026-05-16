@@ -120,6 +120,17 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 
 **Failure blocker:** Invocation hardening remains blocked if adapter outcomes, router terminal states, schema validation, or config activation semantics cannot produce the public result/failure contract.
 
+**P3A-B progress:** Completed on 2026-05-16. Full Phase 3 gate remains blocked by P3C structured output and P3D config lifecycle.
+
+| Check | Evidence |
+|---|---|
+| P3A provider adapter execution | `llm_endpoint.adapters.execute_provider_attempt` resolves endpoint credential refs through the host `SecretResolver`, invokes the matching provider-format adapter, preserves normalized token usage, and converts adapter mismatches, missing secrets, and unsafe adapter exceptions into typed failures. |
+| P3A fake provider adapter | `llm_endpoint.adapters.FakeProviderAdapter` provides deterministic provider-format execution for offline contract tests without network calls or secret leakage. |
+| P3B deadline pool router | `llm_endpoint.router.route_invocation` allocates candidate budgets from resolved policy, preserves ordered failover, retries only retryable availability failures, stops on non-retryable failures, records suppression skip reasons, protects the last eligible candidate, and returns `POOL_EXHAUSTED` when retryable attempts exhaust the pool. |
+| P3B telemetry and traces | `AttemptTrace`, `PoolRouteResult`, and router telemetry emit redacted `llm.pool.attempt`, `llm.endpoint.suppressed`, `llm.success`, `llm.failure`, and `llm.pool.exhausted` events with safe token usage propagation. |
+| Zero BC policy | Added clean-slate `llm_endpoint.router` public surface; no version routers, legacy routing modes, deprecated adapter paths, or migration shims were added. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `47 passed`. |
+
 ## Phase 4: Invocation Hardening
 
 | Track | Components / Contracts | Owner | Deliverables | Dev Units | Depends On |

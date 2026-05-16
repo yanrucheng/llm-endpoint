@@ -25,6 +25,7 @@ def test_manifest_surfaces_are_owned() -> None:
     assert "llm_endpoint.smoke" in names
     assert "llm_endpoint.callbacks" in names
     assert "llm_endpoint.adapters" in names
+    assert "llm_endpoint.router" in names
     assert "llm_endpoint.fixtures" in names
 
 
