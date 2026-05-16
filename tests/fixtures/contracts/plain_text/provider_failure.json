@@ -1,0 +1,9 @@
+{
+  "area": "plain_text",
+  "polarity": "negative",
+  "operation_invocation_id": "inv-plain-text-failure",
+  "endpoint_uid": "primary",
+  "failure_code": "provider_non_retryable_error",
+  "retryability": "non_retryable",
+  "safe_diagnostics_only": true
+}

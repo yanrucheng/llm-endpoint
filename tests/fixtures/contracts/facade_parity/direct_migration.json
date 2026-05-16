@@ -1,0 +1,11 @@
+{
+  "area": "facade_parity",
+  "polarity": "positive",
+  "source_callsite": "nightfall.writer.draft",
+  "operation_invocation_id": "inv-p5a",
+  "expected_diagnostics": [
+    "canonical_direct_api_ready",
+    "no_compatibility_facade"
+  ],
+  "zero_bc": true
+}

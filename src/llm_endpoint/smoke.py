@@ -1,14 +1,16 @@
-"""Offline smoke API shell for config, policy, telemetry, and facade checks."""
+"""Offline and optional live smoke API shells."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from llm_endpoint.adapters import ProviderOutcome, ProviderOutcomeKind
 from llm_endpoint.capabilities import DEFAULT_CAPABILITY_CATALOG, CapabilityCatalog
 from llm_endpoint.config import LLMEndpointConfig, build_registry, validate_config
 from llm_endpoint.invocation import InvocationPlan, InvocationRequest, invoke_plan
-from llm_endpoint.results import TypedFailure
+from llm_endpoint.results import FailureCode, TypedFailure, failure
 from llm_endpoint.telemetry import (
     TelemetryEmitter,
     TelemetryEvent,
@@ -17,6 +19,8 @@ from llm_endpoint.telemetry import (
 )
 
 OFFLINE_SMOKE_VERSION = "v1"
+LIVE_SMOKE_VERSION = "v1"
+LIVE_SMOKE_SAFE_PROMPT = "Return exactly: OK"
 
 
 class SmokeCheckName(StrEnum):
@@ -26,6 +30,14 @@ class SmokeCheckName(StrEnum):
     REGISTRY_BUILD = "registry_build"
     INVOCATION_PLANNING = "invocation_planning"
     TELEMETRY_REDACTION = "telemetry_redaction"
+
+
+class LiveSmokeStatus(StrEnum):
+    """Typed optional live smoke outcomes."""
+
+    SKIPPED = "skipped"
+    PASSED = "passed"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +64,36 @@ class OfflineSmokeReport:
     def __post_init__(self) -> None:
         if self.smoke_version != OFFLINE_SMOKE_VERSION:
             raise ValueError("only offline smoke version 'v1' is supported")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveSmokeReport:
+    """Optional live smoke result envelope with only redacted public fields."""
+
+    ok: bool
+    status: LiveSmokeStatus
+    reason: str
+    events: tuple[TelemetryEvent, ...]
+    config_identity: str | None = None
+    plan: InvocationPlan | None = None
+    provider_outcome: ProviderOutcome | None = None
+    failure: TypedFailure | None = None
+    smoke_version: str = LIVE_SMOKE_VERSION
+
+    def __post_init__(self) -> None:
+        if self.smoke_version != LIVE_SMOKE_VERSION:
+            raise ValueError("only live smoke version 'v1' is supported")
+        if self.status is LiveSmokeStatus.PASSED and not self.ok:
+            raise ValueError("passed live smoke reports must be ok")
+        if (
+            self.status is not LiveSmokeStatus.PASSED
+            and self.ok
+            and self.status is not LiveSmokeStatus.SKIPPED
+        ):
+            raise ValueError("only skipped or passed live smoke reports can be ok")
+
+
+type LiveProviderProbe = Callable[[InvocationPlan], ProviderOutcome | TypedFailure]
 
 
 def run_offline_smoke(
@@ -147,6 +189,175 @@ def run_offline_smoke(
     )
 
 
+def run_optional_live_smoke(
+    *,
+    config: LLMEndpointConfig,
+    role: str,
+    operation_ref: str,
+    explicit_consent: bool,
+    provider_probe: LiveProviderProbe | None = None,
+    capability_catalog: CapabilityCatalog = DEFAULT_CAPABILITY_CATALOG,
+) -> LiveSmokeReport:
+    """Run an explicitly opted-in minimal live probe without exposing payloads or secrets.
+
+    The module owns the boundary and reporting contract. The host owns the provider
+    probe callback, credentials, and network behavior.
+    """
+
+    emitter = TelemetryEmitter()
+    if not explicit_consent:
+        event = _live_smoke_event(
+            emitter,
+            LiveSmokeStatus.SKIPPED,
+            "explicit_consent_required",
+            None,
+        )
+        return LiveSmokeReport(
+            ok=True,
+            status=LiveSmokeStatus.SKIPPED,
+            reason="explicit_consent_required",
+            events=(event,),
+        )
+    if provider_probe is None:
+        event = _live_smoke_event(emitter, LiveSmokeStatus.SKIPPED, "provider_probe_required", None)
+        return LiveSmokeReport(
+            ok=True,
+            status=LiveSmokeStatus.SKIPPED,
+            reason="provider_probe_required",
+            events=(event,),
+        )
+
+    plan_or_failure = invoke_plan(
+        request=InvocationRequest(
+            role=role,
+            operation_ref=operation_ref,
+            messages=({"role": "user", "content": LIVE_SMOKE_SAFE_PROMPT},),
+            deadline_ms=_configured_deadline_ms(
+                config=config,
+                operation_ref=operation_ref,
+                capability_catalog=capability_catalog,
+            ),
+            operation_invocation_id="live-smoke",
+            request_metadata={"smoke": "live", "payload": "minimal"},
+        ),
+        config=config,
+        capability_catalog=capability_catalog,
+        telemetry_emitter=emitter,
+    )
+    if isinstance(plan_or_failure, TypedFailure):
+        event = _live_smoke_event(emitter, LiveSmokeStatus.FAILED, plan_or_failure.code.value, None)
+        return LiveSmokeReport(
+            ok=False,
+            status=LiveSmokeStatus.FAILED,
+            reason=plan_or_failure.code.value,
+            events=tuple(emitter.captured_events),
+            failure=plan_or_failure,
+        )
+
+    try:
+        probe_result = provider_probe(plan_or_failure)
+    except Exception as exc:  # pragma: no cover - host probe behavior is external.
+        typed_failure = failure(
+            code=FailureCode.INTERNAL_ERROR,
+            message="live smoke provider probe raised",
+            operation_invocation_id=plan_or_failure.operation_invocation_id,
+            role=plan_or_failure.role,
+            operation_ref=plan_or_failure.operation_ref,
+            safe_context={"probe_exception": exc.__class__.__name__},
+        )
+        _live_smoke_event(
+            emitter,
+            LiveSmokeStatus.FAILED,
+            typed_failure.code.value,
+            plan_or_failure.config_identity,
+        )
+        return LiveSmokeReport(
+            ok=False,
+            status=LiveSmokeStatus.FAILED,
+            reason=typed_failure.code.value,
+            events=tuple(emitter.captured_events),
+            config_identity=plan_or_failure.config_identity,
+            plan=plan_or_failure,
+            failure=typed_failure,
+        )
+
+    if isinstance(probe_result, TypedFailure):
+        _live_smoke_event(
+            emitter,
+            LiveSmokeStatus.FAILED,
+            probe_result.code.value,
+            plan_or_failure.config_identity,
+        )
+        return LiveSmokeReport(
+            ok=False,
+            status=LiveSmokeStatus.FAILED,
+            reason=probe_result.code.value,
+            events=tuple(emitter.captured_events),
+            config_identity=plan_or_failure.config_identity,
+            plan=plan_or_failure,
+            failure=probe_result,
+        )
+    if probe_result.kind is not ProviderOutcomeKind.SUCCESS:
+        typed_failure = failure(
+            code=probe_result.failure_code or FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            message="live smoke provider probe failed",
+            operation_invocation_id=plan_or_failure.operation_invocation_id,
+            role=plan_or_failure.role,
+            operation_ref=plan_or_failure.operation_ref,
+            endpoint_uid=probe_result.endpoint_uid,
+            policy_fingerprint=plan_or_failure.policy_fingerprint,
+            elapsed_ms=probe_result.elapsed_ms,
+        )
+        _live_smoke_event(
+            emitter,
+            LiveSmokeStatus.FAILED,
+            typed_failure.code.value,
+            plan_or_failure.config_identity,
+        )
+        return LiveSmokeReport(
+            ok=False,
+            status=LiveSmokeStatus.FAILED,
+            reason=typed_failure.code.value,
+            events=tuple(emitter.captured_events),
+            config_identity=plan_or_failure.config_identity,
+            plan=plan_or_failure,
+            provider_outcome=probe_result,
+            failure=typed_failure,
+        )
+
+    _live_smoke_event(
+        emitter,
+        LiveSmokeStatus.PASSED,
+        "provider_probe_passed",
+        plan_or_failure.config_identity,
+    )
+    return LiveSmokeReport(
+        ok=True,
+        status=LiveSmokeStatus.PASSED,
+        reason="provider_probe_passed",
+        events=tuple(emitter.captured_events),
+        config_identity=plan_or_failure.config_identity,
+        plan=plan_or_failure,
+        provider_outcome=probe_result,
+    )
+
+
+def _configured_deadline_ms(
+    *,
+    config: LLMEndpointConfig,
+    operation_ref: str,
+    capability_catalog: CapabilityCatalog,
+) -> int:
+    report = validate_config(config, capability_catalog=capability_catalog)
+    if not report.ok:
+        return 1_000
+    registry = build_registry(config, capability_catalog=capability_catalog)
+    operation = registry.operations_by_ref.get(operation_ref)
+    if operation is None:
+        return 1_000
+    return registry.policies_by_ref[operation.policy_ref].deadline_ms
+
+
 def _smoke_event(
     emitter: TelemetryEmitter,
     ok: bool,
@@ -162,6 +373,27 @@ def _smoke_event(
                 "check_count": str(check_count),
                 "config_identity": config_identity or "",
                 "smoke_version": OFFLINE_SMOKE_VERSION,
+            },
+        )
+    )
+
+
+def _live_smoke_event(
+    emitter: TelemetryEmitter,
+    status: LiveSmokeStatus,
+    reason: str,
+    config_identity: str | None,
+) -> TelemetryEvent:
+    return emitter.emit(
+        telemetry_event(
+            family=TelemetryEventFamily.SMOKE_RESULT,
+            operation_invocation_id="live-smoke",
+            attributes={
+                "ok": str(status is not LiveSmokeStatus.FAILED).lower(),
+                "status": status.value,
+                "reason": reason,
+                "config_identity": config_identity or "",
+                "smoke_version": LIVE_SMOKE_VERSION,
             },
         )
     )

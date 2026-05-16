@@ -1,0 +1,11 @@
+{
+  "area": "facade_parity",
+  "polarity": "negative",
+  "source_callsite": "nightfall.writer.legacy",
+  "legacy_fields": [
+    "provider",
+    "model"
+  ],
+  "expected_failure_code": "invalid_invocation",
+  "zero_bc": true
+}

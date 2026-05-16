@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase5abc"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase5def"
 
 
 class CompatibilityLevel(StrEnum):
@@ -156,9 +156,18 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         name="llm_endpoint.smoke",
         kind=SurfaceKind.VALIDATION_API,
         owner="test-owner",
-        version_rule="Offline smoke API v1 is clean-slate and performs no live calls.",
-        positive_fixture="tests/contracts/test_smoke_contract.py::test_offline_smoke_report_contract",
-        negative_fixture="tests/contracts/test_smoke_contract.py::test_offline_smoke_invalid_config_fails_closed",
+        version_rule=(
+            "Smoke API v1 is clean-slate: offline smoke performs no live calls and "
+            "optional live smoke requires explicit host consent."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5f_live_smoke_uses_safe_minimal_payload"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5f_live_smoke_reports_typed_failed_outcome"
+        ),
     ),
     PublicSurface(
         name="llm_endpoint.callbacks",
@@ -195,9 +204,13 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         kind=SurfaceKind.FIXTURE_SCHEMA,
         owner="test-owner",
         version_rule=(
-            "Fixture skeletons are replaced cleanly before V1; no deprecated fixture layouts."
+            "Fixture skeletons and consumer contract packs are replaced cleanly before V1; "
+            "no deprecated fixture layouts."
         ),
-        positive_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_covers_required_areas",
+        positive_fixture=(
+            "tests/contracts/test_fixture_manifest.py::"
+            "test_consumer_contract_pack_covers_phase_5d_areas"
+        ),
         negative_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_has_positive_and_negative_coverage",
     ),
     PublicSurface(

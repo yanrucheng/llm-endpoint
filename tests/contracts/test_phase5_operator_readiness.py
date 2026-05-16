@@ -1,3 +1,4 @@
+from llm_endpoint.adapters import ProviderOutcomeKind, provider_failure, provider_success
 from llm_endpoint.config import (
     EndpointConfig,
     EndpointPool,
@@ -22,6 +23,12 @@ from llm_endpoint.rollout import (
     RolloutDecision,
     apply_rollout_controls,
     policy_fingerprint_key,
+)
+from llm_endpoint.smoke import (
+    LIVE_SMOKE_SAFE_PROMPT,
+    LiveSmokeReport,
+    LiveSmokeStatus,
+    run_optional_live_smoke,
 )
 
 
@@ -138,6 +145,67 @@ def test_phase_5c_release_guard_requires_changelog_and_migration_notes() -> None
     assert CompatibilityIssueCode.PUBLIC_SURFACE_ADDED in codes
     assert CompatibilityIssueCode.MISSING_CHANGELOG in codes
     assert CompatibilityIssueCode.MISSING_MIGRATION_NOTE in codes
+
+
+def test_phase_5f_live_smoke_skips_without_explicit_consent() -> None:
+    report = run_optional_live_smoke(
+        config=_config(),
+        role="writer",
+        operation_ref="draft",
+        explicit_consent=False,
+    )
+
+    assert isinstance(report, LiveSmokeReport)
+    assert report.ok is True
+    assert report.status is LiveSmokeStatus.SKIPPED
+    assert report.reason == "explicit_consent_required"
+    assert report.events[-1].attributes["status"] == "skipped"
+
+
+def test_phase_5f_live_smoke_uses_safe_minimal_payload() -> None:
+    seen_messages: list[object] = []
+
+    def probe(plan: InvocationPlan):
+        seen_messages.extend(plan.messages)
+        return provider_success(endpoint_uid="primary", elapsed_ms=20, content="OK")
+
+    report = run_optional_live_smoke(
+        config=_config(),
+        role="writer",
+        operation_ref="draft",
+        explicit_consent=True,
+        provider_probe=probe,
+    )
+
+    assert report.ok is True
+    assert report.status is LiveSmokeStatus.PASSED
+    assert seen_messages == [{"role": "user", "content": LIVE_SMOKE_SAFE_PROMPT}]
+    assert report.events[-1].attributes["status"] == "passed"
+
+
+def test_phase_5f_live_smoke_reports_typed_failed_outcome() -> None:
+    def probe(_plan: InvocationPlan):
+        return provider_failure(
+            kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
+            endpoint_uid="primary",
+            elapsed_ms=20,
+            failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            safe_provider_status={"provider": "synthetic_failure"},
+        )
+
+    report = run_optional_live_smoke(
+        config=_config(),
+        role="writer",
+        operation_ref="draft",
+        explicit_consent=True,
+        provider_probe=probe,
+    )
+
+    assert report.ok is False
+    assert report.status is LiveSmokeStatus.FAILED
+    assert isinstance(report.failure, TypedFailure)
+    assert report.failure.code is FailureCode.PROVIDER_NON_RETRYABLE_ERROR
+    assert report.events[-1].attributes["reason"] == "provider_non_retryable_error"
 
 
 def _request(operation_invocation_id: str) -> InvocationRequest:

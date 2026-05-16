@@ -1,4 +1,4 @@
-"""Golden contract fixture skeleton manifest for Phase 1 conformance."""
+"""Golden contract fixture skeletons and consumer contract-pack manifest."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 FIXTURE_MANIFEST_VERSION = "v1"
+CONSUMER_CONTRACT_PACK_VERSION = "v1"
 
 
 class FixtureArea(StrEnum):
@@ -19,6 +20,20 @@ class FixtureArea(StrEnum):
     ROUTER = "router"
     STRUCTURED_OUTPUT = "structured_output"
     ADAPTER_PARITY = "adapter_parity"
+    PLAIN_TEXT = "plain_text"
+    FACADE_PARITY = "facade_parity"
+
+
+class ConsumerContractArea(StrEnum):
+    """Installable consumer contract areas required for Phase 5D adoption."""
+
+    CONFIG_VALIDATION = "config_validation"
+    FAILURE_TAXONOMY = "failure_taxonomy"
+    TELEMETRY_REDACTION = "telemetry_redaction"
+    STRUCTURED_OUTPUT = "structured_output"
+    POOL_SIMULATION = "pool_simulation"
+    PLAIN_TEXT = "plain_text"
+    FACADE_PARITY = "facade_parity"
 
 
 class FixturePolarity(StrEnum):
@@ -42,6 +57,36 @@ class ContractFixture:
     def __post_init__(self) -> None:
         if not self.name or not self.path or not self.owner:
             raise ValueError("fixture name, path, and owner are required")
+
+
+@dataclass(frozen=True, slots=True)
+class ConsumerContractCase:
+    """One installable contract-pack case for consuming repositories."""
+
+    area: ConsumerContractArea
+    name: str
+    fixture_path: str
+    test_selector: str
+    owner: str
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.fixture_path or not self.test_selector or not self.owner:
+            raise ValueError("consumer contract cases require name, fixture, selector, and owner")
+
+
+@dataclass(frozen=True, slots=True)
+class ConsumerContractPack:
+    """Machine-readable contract pack consumers can install and run offline."""
+
+    name: str
+    version: str
+    cases: tuple[ConsumerContractCase, ...]
+
+    def __post_init__(self) -> None:
+        if self.version != CONSUMER_CONTRACT_PACK_VERSION:
+            raise ValueError("only consumer contract pack version 'v1' is supported")
+        if not self.name:
+            raise ValueError("consumer contract pack name is required")
 
 
 CONTRACT_FIXTURES: tuple[ContractFixture, ...] = (
@@ -157,6 +202,96 @@ CONTRACT_FIXTURES: tuple[ContractFixture, ...] = (
         path="tests/fixtures/contracts/adapter_parity/raw_provider_leak.json",
         owner="adapter-owner",
     ),
+    ContractFixture(
+        area=FixtureArea.PLAIN_TEXT,
+        polarity=FixturePolarity.POSITIVE,
+        name="plain_text_success",
+        path="tests/fixtures/contracts/plain_text/success.json",
+        owner="api-owner",
+    ),
+    ContractFixture(
+        area=FixtureArea.PLAIN_TEXT,
+        polarity=FixturePolarity.NEGATIVE,
+        name="plain_text_provider_failure",
+        path="tests/fixtures/contracts/plain_text/provider_failure.json",
+        owner="api-owner",
+    ),
+    ContractFixture(
+        area=FixtureArea.FACADE_PARITY,
+        polarity=FixturePolarity.POSITIVE,
+        name="direct_migration_parity",
+        path="tests/fixtures/contracts/facade_parity/direct_migration.json",
+        owner="migration-owner",
+    ),
+    ContractFixture(
+        area=FixtureArea.FACADE_PARITY,
+        polarity=FixturePolarity.NEGATIVE,
+        name="legacy_fields_rejected",
+        path="tests/fixtures/contracts/facade_parity/legacy_fields_rejected.json",
+        owner="migration-owner",
+    ),
+)
+
+
+CONSUMER_CONTRACT_CASES: tuple[ConsumerContractCase, ...] = (
+    ConsumerContractCase(
+        area=ConsumerContractArea.CONFIG_VALIDATION,
+        name="valid_config",
+        fixture_path="tests/fixtures/contracts/config/valid.json",
+        test_selector="tests/contracts/test_config_contract.py::test_valid_config_contract",
+        owner="registry-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.FAILURE_TAXONOMY,
+        name="typed_failure",
+        fixture_path="tests/fixtures/contracts/failures/typed_failure.json",
+        test_selector="tests/contracts/test_results_contract.py::test_failure_contract_is_safe",
+        owner="runtime-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.TELEMETRY_REDACTION,
+        name="redacted_event",
+        fixture_path="tests/fixtures/contracts/telemetry/redacted_event.json",
+        test_selector="tests/contracts/test_telemetry_contract.py::test_redacted_event_contract",
+        owner="observability-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.STRUCTURED_OUTPUT,
+        name="schema_validated",
+        fixture_path="tests/fixtures/contracts/structured_output/schema_validated.json",
+        test_selector=(
+            "tests/contracts/test_structured_output_contract.py::"
+            "test_json_schema_structured_output_validates_and_emits_schema_identity"
+        ),
+        owner="schema-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.POOL_SIMULATION,
+        name="ordered_failover",
+        fixture_path="tests/fixtures/contracts/router/ordered_failover.json",
+        test_selector="tests/contracts/test_router_contract.py::test_ordered_retryable_failover",
+        owner="runtime-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.PLAIN_TEXT,
+        name="plain_text_success",
+        fixture_path="tests/fixtures/contracts/plain_text/success.json",
+        test_selector=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4a_plain_text_path_requires_no_schema_resolver"
+        ),
+        owner="api-owner",
+    ),
+    ConsumerContractCase(
+        area=ConsumerContractArea.FACADE_PARITY,
+        name="direct_migration_parity",
+        fixture_path="tests/fixtures/contracts/facade_parity/direct_migration.json",
+        test_selector=(
+            "tests/contracts/test_phase5_operator_readiness.py::"
+            "test_phase_5a_direct_migration_delegates_to_canonical_invocation"
+        ),
+        owner="migration-owner",
+    ),
 )
 
 
@@ -164,6 +299,28 @@ def fixtures_by_area(area: FixtureArea) -> tuple[ContractFixture, ...]:
     """Return fixture skeleton entries for one conformance area."""
 
     return tuple(fixture for fixture in CONTRACT_FIXTURES if fixture.area is area)
+
+
+def consumer_contract_cases_by_area(
+    area: ConsumerContractArea,
+) -> tuple[ConsumerContractCase, ...]:
+    """Return installable consumer contract cases for one adoption area."""
+
+    return tuple(
+        contract_case for contract_case in CONSUMER_CONTRACT_CASES if contract_case.area is area
+    )
+
+
+def build_consumer_contract_pack(
+    name: str = "llm-endpoint-consumer-contracts",
+) -> ConsumerContractPack:
+    """Build the current Zero BC consumer contract pack."""
+
+    return ConsumerContractPack(
+        name=name,
+        version=CONSUMER_CONTRACT_PACK_VERSION,
+        cases=CONSUMER_CONTRACT_CASES,
+    )
 
 
 def assert_fixture_manifest_complete() -> None:
@@ -177,3 +334,19 @@ def assert_fixture_manifest_complete() -> None:
     if missing:
         names = ", ".join(sorted(missing))
         raise ValueError(f"fixture manifest missing required coverage: {names}")
+
+
+def assert_consumer_contract_pack_complete(
+    pack: ConsumerContractPack | None = None,
+) -> None:
+    """Fail if the installable consumer contract pack lacks any Phase 5D area."""
+
+    contract_pack = pack or build_consumer_contract_pack()
+    missing = [
+        area.value
+        for area in ConsumerContractArea
+        if not any(contract_case.area is area for contract_case in contract_pack.cases)
+    ]
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise ValueError(f"consumer contract pack missing required coverage: {names}")

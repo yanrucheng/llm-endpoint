@@ -1,0 +1,9 @@
+{
+  "area": "plain_text",
+  "polarity": "positive",
+  "operation_invocation_id": "inv-plain-text-success",
+  "endpoint_uid": "primary",
+  "text": "OK",
+  "policy_fingerprint": "policy-test",
+  "elapsed_ms": 12
+}
