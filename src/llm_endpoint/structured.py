@@ -38,7 +38,7 @@ def normalize_structured_provider_outcome(
 
     if outcome.payload is None:
         return failure(
-            code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+            code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="provider success outcome omitted structured payload",
             operation_invocation_id=context.operation_invocation_id,
             role=context.role,
@@ -103,7 +103,7 @@ def _schema_validation_failure(
     if extra_context is not None:
         safe_context.update(extra_context)
     return failure(
-        code=FailureCode.SCHEMA_VALIDATION_FAILED,
+        code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
         message=message,
         operation_invocation_id=context.operation_invocation_id,
         role=context.role,
@@ -188,7 +188,7 @@ def _extract_payload(
     payload = outcome.payload
     if payload is None:
         return failure(
-            code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+            code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="provider success outcome omitted structured payload",
             operation_invocation_id=context.operation_invocation_id,
             role=context.role,
@@ -203,7 +203,7 @@ def _extract_payload(
     content = payload.content
     if not isinstance(content, Mapping):
         return failure(
-            code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+            code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="structured provider output must be a mapping",
             operation_invocation_id=context.operation_invocation_id,
             role=context.role,
@@ -218,7 +218,7 @@ def _extract_payload(
     if context.mode is StructuredOutputMode.TOOL_CALL:
         if payload.tool_name != context.schema.name:
             return failure(
-                code=FailureCode.WRONG_TOOL_OUTPUT,
+                code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
                 message="provider returned the wrong terminal tool",
                 operation_invocation_id=context.operation_invocation_id,
                 role=context.role,
@@ -234,7 +234,7 @@ def _extract_payload(
             )
     elif context.mode is not StructuredOutputMode.JSON_SCHEMA:
         return failure(
-            code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+            code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="unsupported structured-output extraction mode",
             operation_invocation_id=context.operation_invocation_id,
             role=context.role,

@@ -258,7 +258,7 @@ def run_optional_live_smoke(
         probe_result = provider_probe(plan_or_failure)
     except Exception as exc:  # pragma: no cover - host probe behavior is external.
         typed_failure = failure(
-            code=FailureCode.INTERNAL_ERROR,
+            code=FailureCode.SMOKE_FAILED,
             message="live smoke provider probe raised",
             operation_invocation_id=plan_or_failure.operation_invocation_id,
             role=plan_or_failure.role,
@@ -299,7 +299,7 @@ def run_optional_live_smoke(
         )
     if probe_result.kind is not ProviderOutcomeKind.SUCCESS:
         typed_failure = failure(
-            code=probe_result.failure_code or FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            code=probe_result.failure_code or FailureCode.PROVIDER_FAILURE,
             message="live smoke provider probe failed",
             operation_invocation_id=plan_or_failure.operation_invocation_id,
             role=plan_or_failure.role,

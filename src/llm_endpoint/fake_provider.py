@@ -87,7 +87,7 @@ class CancellingFakeProviderAdapter:
                 kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
                 endpoint_uid=plan.endpoint_uid,
                 elapsed_ms=0,
-                failure_code=FailureCode.UNSUPPORTED_PROVIDER,
+                failure_code=FailureCode.UNSUPPORTED_PROVIDER_FORMAT,
                 safe_provider_status={"adapter": "fake_provider_format_mismatch"},
             )
         else:
@@ -101,7 +101,7 @@ class CancellingFakeProviderAdapter:
                     kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
                     endpoint_uid=plan.endpoint_uid,
                     elapsed_ms=0,
-                    failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+                    failure_code=FailureCode.PROVIDER_FAILURE,
                     safe_provider_status={"adapter": "fake_outcome_missing"},
                 )
             )
@@ -145,13 +145,13 @@ def fake_outcome(scenario: FakeProviderScenario, endpoint_uid: str) -> ProviderO
     if scenario is FakeProviderScenario.RATE_LIMIT:
         return _availability_failure(
             endpoint_uid,
-            FailureCode.PROVIDER_RATE_LIMITED,
+            FailureCode.INVOCATION_RATE_LIMITED,
             status="rate_limited",
         )
     if scenario is FakeProviderScenario.QUOTA:
         return _availability_failure(
             endpoint_uid,
-            FailureCode.PROVIDER_QUOTA_EXHAUSTED,
+            FailureCode.INVOCATION_QUOTA_EXHAUSTED,
             status="quota_exhausted",
         )
     if scenario is FakeProviderScenario.TIMEOUT:
@@ -159,13 +159,19 @@ def fake_outcome(scenario: FakeProviderScenario, endpoint_uid: str) -> ProviderO
             kind=ProviderOutcomeKind.TIMEOUT,
             endpoint_uid=endpoint_uid,
             elapsed_ms=500,
-            failure_code=FailureCode.PROVIDER_TIMEOUT,
+            failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
             safe_provider_status={"status": "timeout"},
         )
-    if scenario in {FakeProviderScenario.TRANSIENT_NETWORK, FakeProviderScenario.SERVER_5XX}:
+    if scenario is FakeProviderScenario.TRANSIENT_NETWORK:
         return _availability_failure(
             endpoint_uid,
-            FailureCode.PROVIDER_TRANSIENT_ERROR,
+            FailureCode.TRANSIENT_NETWORK,
+            status=scenario.value,
+        )
+    if scenario is FakeProviderScenario.SERVER_5XX:
+        return _availability_failure(
+            endpoint_uid,
+            FailureCode.PROVIDER_5XX,
             status=scenario.value,
         )
     if scenario is FakeProviderScenario.REFUSAL:
@@ -173,7 +179,7 @@ def fake_outcome(scenario: FakeProviderScenario, endpoint_uid: str) -> ProviderO
             kind=ProviderOutcomeKind.REFUSAL,
             endpoint_uid=endpoint_uid,
             elapsed_ms=20,
-            failure_code=FailureCode.PROVIDER_REFUSAL,
+            failure_code=FailureCode.STRUCTURED_OUTPUT_REFUSAL,
             safe_provider_status={"status": "refusal"},
         )
     if scenario is FakeProviderScenario.MALFORMED_JSON:
@@ -190,7 +196,7 @@ def fake_outcome(scenario: FakeProviderScenario, endpoint_uid: str) -> ProviderO
             kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
             endpoint_uid=endpoint_uid,
             elapsed_ms=20,
-            failure_code=FailureCode.DUPLICATE_TERMINAL_OUTPUT,
+            failure_code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             safe_provider_status={"status": "duplicate_terminal_tool"},
         )
     if scenario is FakeProviderScenario.SCHEMA_VIOLATION:
@@ -200,7 +206,7 @@ def fake_outcome(scenario: FakeProviderScenario, endpoint_uid: str) -> ProviderO
     if scenario is FakeProviderScenario.POOL_EXHAUSTION:
         return _availability_failure(
             endpoint_uid,
-            FailureCode.PROVIDER_TRANSIENT_ERROR,
+            FailureCode.TRANSIENT_NETWORK,
             status="pool_exhaustion",
         )
     raise ValueError(f"unsupported fake provider scenario: {scenario}")

@@ -6,6 +6,6 @@
     "provider",
     "model"
   ],
-  "expected_failure_code": "invalid_invocation",
+  "expected_failure_code": "llm.endpoint.unsupported_runtime_knob",
   "zero_bc": true
 }

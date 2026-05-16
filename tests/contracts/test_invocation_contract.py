@@ -49,7 +49,7 @@ def test_invalid_invocation_returns_typed_failure() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.INVALID_INVOCATION
+    assert result.code is FailureCode.INVALID_MESSAGES
     assert result.context.operation_invocation_id == "inv-2"
 
 
@@ -66,7 +66,8 @@ def test_structured_operation_requires_schema_ref() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.SCHEMA_NOT_FOUND
+    assert result.code is FailureCode.MISSING_SCHEMA_CONTRACT
+    assert result.code.value == "llm.schema.missing_contract"
 
 
 def test_unknown_operation_returns_typed_failure() -> None:
@@ -82,7 +83,8 @@ def test_unknown_operation_returns_typed_failure() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.INVALID_INVOCATION
+    assert result.code is FailureCode.UNKNOWN_ENTRYPOINT
+    assert result.code.value == "llm.endpoint.unknown_entrypoint"
 
 
 def _config(schema_ref: str | None = "schema://draft/v1") -> LLMEndpointConfig:

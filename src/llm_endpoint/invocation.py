@@ -103,7 +103,7 @@ def invoke_plan(
     if registry is None:
         if config is None:
             typed_failure = failure(
-                code=FailureCode.INVALID_CONFIG,
+                code=FailureCode.INVALID_ENDPOINT_CONFIG,
                 message="config or registry is required",
                 operation_invocation_id=invocation_id,
                 role=request.role,
@@ -128,7 +128,7 @@ def invoke_plan(
         )
         if not report.ok:
             typed_failure = failure(
-                code=FailureCode.INVALID_CONFIG,
+                code=FailureCode.INVALID_ENDPOINT_CONFIG,
                 message="config validation failed",
                 operation_invocation_id=invocation_id,
                 role=request.role,
@@ -182,21 +182,21 @@ def invoke_plan(
 def _validate_request(request: InvocationRequest, invocation_id: str) -> TypedFailure | None:
     if not request.role:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.UNKNOWN_ROLE,
             message="role is required",
             operation_invocation_id=invocation_id,
             operation_ref=request.operation_ref or None,
         )
     if not request.operation_ref:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.OPERATION_REF_REQUIRED,
             message="operation_ref is required",
             operation_invocation_id=invocation_id,
             role=request.role,
         )
     if request.deadline_ms <= 0:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.BUDGET_VIOLATION,
             message="deadline_ms must be positive",
             operation_invocation_id=invocation_id,
             role=request.role,
@@ -204,7 +204,7 @@ def _validate_request(request: InvocationRequest, invocation_id: str) -> TypedFa
         )
     if not request.messages:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.INVALID_MESSAGES,
             message="messages must contain at least one entry",
             operation_invocation_id=invocation_id,
             role=request.role,
@@ -230,7 +230,7 @@ def _invalid_message(
     message: str,
 ) -> TypedFailure:
     return failure(
-        code=FailureCode.INVALID_INVOCATION,
+        code=FailureCode.INVALID_MESSAGES,
         message=message,
         operation_invocation_id=invocation_id,
         role=request.role,
@@ -248,7 +248,7 @@ def _request_overrides(
         policy = registry.resolve_operation_policy(request.operation_ref)
     except KeyError as exc:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.UNKNOWN_ENTRYPOINT,
             message=str(exc),
             operation_invocation_id=invocation_id,
             role=request.role,
@@ -257,7 +257,7 @@ def _request_overrides(
     base = request.caller_overrides or CallerPolicyOverrides()
     if base.deadline_ms is not None and base.deadline_ms != request.deadline_ms:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.UNSUPPORTED_RUNTIME_KNOB,
             message="deadline_ms must match caller_overrides.deadline_ms when both are supplied",
             operation_invocation_id=invocation_id,
             role=request.role,
@@ -285,7 +285,7 @@ def _schema_ref(
     if schema_ref:
         return schema_ref
     return failure(
-        code=FailureCode.SCHEMA_NOT_FOUND,
+        code=FailureCode.MISSING_SCHEMA_CONTRACT,
         message="structured-output operation requires a schema_contract_ref",
         operation_invocation_id=invocation_id,
         role=request.role,

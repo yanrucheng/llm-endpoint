@@ -62,7 +62,7 @@ def test_phase_2_gate_returns_typed_failure_without_provider_call() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.INVALID_INVOCATION
+    assert result.code is FailureCode.INVALID_MESSAGES
     assert result.context.operation_invocation_id == "phase2-invalid"
     assert result.is_retryable is False
     assert [event.family for event in emitter.captured_events] == [TelemetryEventFamily.FAILURE]

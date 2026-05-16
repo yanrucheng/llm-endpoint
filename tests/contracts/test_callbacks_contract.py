@@ -22,7 +22,7 @@ def test_secret_resolution_contract_is_redacted() -> None:
     missing = missing_secret("secret://missing")
     typed_failure = missing.to_failure(operation_invocation_id="inv-1", endpoint_uid="primary")
 
-    assert typed_failure.code is FailureCode.MISSING_SECRET
+    assert typed_failure.code is FailureCode.CREDENTIAL_UNAVAILABLE
     assert typed_failure.diagnostics.safe_context["secret_ref"] == "secret://missing"
     assert "super-secret-token" not in repr(typed_failure)
 
@@ -54,4 +54,4 @@ def test_schema_resolution_contract() -> None:
     missing = SchemaResolution(ref="schema://missing", status=SchemaResolutionStatus.NOT_FOUND)
     typed_failure = missing.to_failure(operation_invocation_id="inv-2", operation_ref="draft")
 
-    assert typed_failure.code is FailureCode.SCHEMA_NOT_FOUND
+    assert typed_failure.code is FailureCode.UNKNOWN_SCHEMA_CONTRACT

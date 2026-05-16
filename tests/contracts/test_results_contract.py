@@ -15,10 +15,46 @@ from llm_endpoint.results import (
 
 
 def test_failure_codes_are_public() -> None:
+    expected_codes = {
+        "llm.config.invalid_endpoint_config",
+        "llm.config.credential_unavailable",
+        "llm.endpoint.unknown_role",
+        "llm.endpoint.unknown_entrypoint",
+        "llm.endpoint.unsupported_provider_format",
+        "llm.endpoint.suppressed",
+        "llm.endpoint.unsupported_runtime_knob",
+        "llm.policy.capability_mismatch",
+        "llm.policy.unsupported_reasoning_mode",
+        "llm.policy.output_budget_exceeds_hard_cap",
+        "llm.policy.candidate_budget_unallocatable",
+        "llm.policy.operation_ref_required",
+        "llm.input.invalid_messages",
+        "llm.input.cancelled",
+        "llm.schema.missing_contract",
+        "llm.schema.unknown_contract",
+        "llm.structured_output.invalid_payload",
+        "llm.structured_output.refusal",
+        "llm.invocation.rate_limited",
+        "llm.invocation.quota_exhausted",
+        "llm.invocation.transient_network",
+        "llm.invocation.provider_5xx",
+        "llm.invocation.provider_failure",
+        "llm.invocation.local_candidate_timeout",
+        "llm.invocation.late_response_discarded",
+        "llm.deadline.exceeded",
+        "llm.pool.no_eligible_candidate",
+        "llm.pool.exhausted",
+        "llm.smoke.skipped",
+        "llm.smoke.failed",
+        "llm.budget.violation",
+        "llm.module.unsupported_version",
+    }
+
+    assert {code.value for code in FailureCode} == expected_codes
     assert set(RETRYABILITY_BY_CODE) == set(FailureCode)
     assert set(FAILURE_CLASS_BY_CODE) == set(FailureCode)
-    assert RETRYABILITY_BY_CODE[FailureCode.PROVIDER_TIMEOUT] is Retryability.RETRYABLE
-    assert RETRYABILITY_BY_CODE[FailureCode.PROVIDER_REFUSAL] is Retryability.NON_RETRYABLE
+    assert RETRYABILITY_BY_CODE[FailureCode.LOCAL_CANDIDATE_TIMEOUT] is Retryability.RETRYABLE
+    assert RETRYABILITY_BY_CODE[FailureCode.STRUCTURED_OUTPUT_REFUSAL] is Retryability.NON_RETRYABLE
 
 
 def test_success_result_contracts() -> None:
@@ -46,7 +82,7 @@ def test_success_result_contracts() -> None:
 
 def test_failure_contract_is_safe() -> None:
     typed_failure = failure(
-        code=FailureCode.PROVIDER_TIMEOUT,
+        code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
         message="provider timed out",
         operation_invocation_id="inv-3",
         role="writer",
@@ -83,7 +119,7 @@ def test_provider_failure_normalization() -> None:
             kind=ProviderOutcomeKind.TIMEOUT,
             endpoint_uid="primary",
             elapsed_ms=120,
-            failure_code=FailureCode.PROVIDER_TIMEOUT,
+            failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
             safe_provider_status={"status": "timeout"},
         ),
         operation_invocation_id="inv-5",
@@ -94,7 +130,7 @@ def test_provider_failure_normalization() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.PROVIDER_TIMEOUT
+    assert result.code is FailureCode.LOCAL_CANDIDATE_TIMEOUT
     assert result.is_retryable is True
     assert result.diagnostics.safe_context == {"provider_status.status": "timeout"}
 
@@ -111,4 +147,4 @@ def test_structured_payload_requires_pipeline() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.MALFORMED_PROVIDER_OUTPUT
+    assert result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD

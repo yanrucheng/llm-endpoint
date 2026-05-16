@@ -79,7 +79,7 @@ def test_schema_validation_failure_is_typed_and_non_retryable() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
     assert result.terminal_result.is_retryable is False
     assert result.terminal_result.diagnostics.safe_context["validation_stage"] == "host_validator"
 
@@ -108,7 +108,7 @@ def test_json_schema_validation_runs_before_host_validator() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
     assert result.terminal_result.diagnostics.safe_context["validation_stage"] == "json_schema"
 
 
@@ -136,7 +136,7 @@ def test_host_validator_exception_fails_closed() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
     assert result.terminal_result.diagnostics.safe_context == {
         "schema_ref": "schema://answer/v1",
         "schema_name": "answer",
@@ -174,7 +174,7 @@ def test_missing_schema_resolution_blocks_provider_attempts() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.SCHEMA_NOT_FOUND
+    assert result.terminal_result.code is FailureCode.UNKNOWN_SCHEMA_CONTRACT
     assert result.attempt_traces == ()
     assert adapter.calls_by_endpoint == {}
 
@@ -204,7 +204,7 @@ def test_tool_call_mode_rejects_wrong_terminal_tool() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.WRONG_TOOL_OUTPUT
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
 
 
 def _answer_schema(ref: str) -> SchemaResolution:

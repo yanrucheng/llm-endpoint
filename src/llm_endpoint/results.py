@@ -37,98 +37,113 @@ class FailureClass(StrEnum):
 
 
 class FailureCode(StrEnum):
-    """Stable public failure codes owned by the result contract."""
+    """Stable public PRD failure codes owned by the result contract."""
 
-    INVALID_INVOCATION = "invalid_invocation"
-    INVALID_CONFIG = "invalid_config"
-    UNSUPPORTED_PROVIDER = "unsupported_provider"
-    UNSUPPORTED_MODEL_FAMILY = "unsupported_model_family"
-    UNSUPPORTED_CAPABILITY = "unsupported_capability"
-    MISSING_SECRET = "missing_secret"
-    SECRET_RESOLUTION_FAILED = "secret_resolution_failed"
-    SCHEMA_NOT_FOUND = "schema_not_found"
-    SCHEMA_VALIDATION_FAILED = "schema_validation_failed"
-    POLICY_VIOLATION = "policy_violation"
-    BUDGET_VIOLATION = "budget_violation"
-    NO_ELIGIBLE_ENDPOINT = "no_eligible_endpoint"
-    ENDPOINT_SUPPRESSED = "endpoint_suppressed"
-    POOL_EXHAUSTED = "pool_exhausted"
-    PROVIDER_RATE_LIMITED = "provider_rate_limited"
-    PROVIDER_QUOTA_EXHAUSTED = "provider_quota_exhausted"
-    PROVIDER_TIMEOUT = "provider_timeout"
-    PROVIDER_TRANSIENT_ERROR = "provider_transient_error"
-    PROVIDER_NON_RETRYABLE_ERROR = "provider_non_retryable_error"
-    PROVIDER_REFUSAL = "provider_refusal"
-    MALFORMED_PROVIDER_OUTPUT = "malformed_provider_output"
-    WRONG_TOOL_OUTPUT = "wrong_tool_output"
-    DUPLICATE_TERMINAL_OUTPUT = "duplicate_terminal_output"
-    DEADLINE_EXCEEDED = "deadline_exceeded"
-    CANCELLED = "cancelled"
-    LATE_RESPONSE_DISCARDED = "late_response_discarded"
-    INTERNAL_ERROR = "internal_error"
+    INVALID_ENDPOINT_CONFIG = "llm.config.invalid_endpoint_config"
+    CREDENTIAL_UNAVAILABLE = "llm.config.credential_unavailable"
+    UNKNOWN_ROLE = "llm.endpoint.unknown_role"
+    UNKNOWN_ENTRYPOINT = "llm.endpoint.unknown_entrypoint"
+    UNSUPPORTED_PROVIDER_FORMAT = "llm.endpoint.unsupported_provider_format"
+    ENDPOINT_SUPPRESSED = "llm.endpoint.suppressed"
+    UNSUPPORTED_RUNTIME_KNOB = "llm.endpoint.unsupported_runtime_knob"
+    CAPABILITY_MISMATCH = "llm.policy.capability_mismatch"
+    UNSUPPORTED_REASONING_MODE = "llm.policy.unsupported_reasoning_mode"
+    OUTPUT_BUDGET_EXCEEDS_HARD_CAP = "llm.policy.output_budget_exceeds_hard_cap"
+    CANDIDATE_BUDGET_UNALLOCATABLE = "llm.policy.candidate_budget_unallocatable"
+    OPERATION_REF_REQUIRED = "llm.policy.operation_ref_required"
+    INVALID_MESSAGES = "llm.input.invalid_messages"
+    CANCELLED = "llm.input.cancelled"
+    MISSING_SCHEMA_CONTRACT = "llm.schema.missing_contract"
+    UNKNOWN_SCHEMA_CONTRACT = "llm.schema.unknown_contract"
+    INVALID_STRUCTURED_OUTPUT_PAYLOAD = "llm.structured_output.invalid_payload"
+    STRUCTURED_OUTPUT_REFUSAL = "llm.structured_output.refusal"
+    INVOCATION_RATE_LIMITED = "llm.invocation.rate_limited"
+    INVOCATION_QUOTA_EXHAUSTED = "llm.invocation.quota_exhausted"
+    TRANSIENT_NETWORK = "llm.invocation.transient_network"
+    PROVIDER_5XX = "llm.invocation.provider_5xx"
+    PROVIDER_FAILURE = "llm.invocation.provider_failure"
+    LOCAL_CANDIDATE_TIMEOUT = "llm.invocation.local_candidate_timeout"
+    LATE_RESPONSE_DISCARDED = "llm.invocation.late_response_discarded"
+    DEADLINE_EXCEEDED = "llm.deadline.exceeded"
+    NO_ELIGIBLE_CANDIDATE = "llm.pool.no_eligible_candidate"
+    POOL_EXHAUSTED = "llm.pool.exhausted"
+    SMOKE_SKIPPED = "llm.smoke.skipped"
+    SMOKE_FAILED = "llm.smoke.failed"
+    BUDGET_VIOLATION = "llm.budget.violation"
+    MODULE_UNSUPPORTED_VERSION = "llm.module.unsupported_version"
 
 
 RETRYABILITY_BY_CODE: Mapping[FailureCode, Retryability] = MappingProxyType(
     {
-        FailureCode.INVALID_INVOCATION: Retryability.NON_RETRYABLE,
-        FailureCode.INVALID_CONFIG: Retryability.NON_RETRYABLE,
-        FailureCode.UNSUPPORTED_PROVIDER: Retryability.NON_RETRYABLE,
-        FailureCode.UNSUPPORTED_MODEL_FAMILY: Retryability.NON_RETRYABLE,
-        FailureCode.UNSUPPORTED_CAPABILITY: Retryability.NON_RETRYABLE,
-        FailureCode.MISSING_SECRET: Retryability.NON_RETRYABLE,
-        FailureCode.SECRET_RESOLUTION_FAILED: Retryability.NON_RETRYABLE,
-        FailureCode.SCHEMA_NOT_FOUND: Retryability.NON_RETRYABLE,
-        FailureCode.SCHEMA_VALIDATION_FAILED: Retryability.NON_RETRYABLE,
-        FailureCode.POLICY_VIOLATION: Retryability.NON_RETRYABLE,
-        FailureCode.BUDGET_VIOLATION: Retryability.NON_RETRYABLE,
-        FailureCode.NO_ELIGIBLE_ENDPOINT: Retryability.NON_RETRYABLE,
-        FailureCode.ENDPOINT_SUPPRESSED: Retryability.NON_RETRYABLE,
-        FailureCode.POOL_EXHAUSTED: Retryability.NON_RETRYABLE,
-        FailureCode.PROVIDER_RATE_LIMITED: Retryability.RETRYABLE,
-        FailureCode.PROVIDER_QUOTA_EXHAUSTED: Retryability.RETRYABLE,
-        FailureCode.PROVIDER_TIMEOUT: Retryability.RETRYABLE,
-        FailureCode.PROVIDER_TRANSIENT_ERROR: Retryability.RETRYABLE,
-        FailureCode.PROVIDER_NON_RETRYABLE_ERROR: Retryability.NON_RETRYABLE,
-        FailureCode.PROVIDER_REFUSAL: Retryability.NON_RETRYABLE,
-        FailureCode.MALFORMED_PROVIDER_OUTPUT: Retryability.NON_RETRYABLE,
-        FailureCode.WRONG_TOOL_OUTPUT: Retryability.NON_RETRYABLE,
-        FailureCode.DUPLICATE_TERMINAL_OUTPUT: Retryability.NON_RETRYABLE,
-        FailureCode.DEADLINE_EXCEEDED: Retryability.NON_RETRYABLE,
+        FailureCode.INVALID_ENDPOINT_CONFIG: Retryability.NON_RETRYABLE,
+        FailureCode.CREDENTIAL_UNAVAILABLE: Retryability.NON_RETRYABLE,
+        FailureCode.UNKNOWN_ROLE: Retryability.NON_RETRYABLE,
+        FailureCode.UNKNOWN_ENTRYPOINT: Retryability.NON_RETRYABLE,
+        FailureCode.UNSUPPORTED_PROVIDER_FORMAT: Retryability.NON_RETRYABLE,
+        FailureCode.ENDPOINT_SUPPRESSED: Retryability.RETRYABLE,
+        FailureCode.UNSUPPORTED_RUNTIME_KNOB: Retryability.NON_RETRYABLE,
+        FailureCode.CAPABILITY_MISMATCH: Retryability.NON_RETRYABLE,
+        FailureCode.UNSUPPORTED_REASONING_MODE: Retryability.NON_RETRYABLE,
+        FailureCode.OUTPUT_BUDGET_EXCEEDS_HARD_CAP: Retryability.NON_RETRYABLE,
+        FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE: Retryability.NON_RETRYABLE,
+        FailureCode.OPERATION_REF_REQUIRED: Retryability.NON_RETRYABLE,
+        FailureCode.INVALID_MESSAGES: Retryability.NON_RETRYABLE,
         FailureCode.CANCELLED: Retryability.NON_RETRYABLE,
+        FailureCode.MISSING_SCHEMA_CONTRACT: Retryability.NON_RETRYABLE,
+        FailureCode.UNKNOWN_SCHEMA_CONTRACT: Retryability.NON_RETRYABLE,
+        FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD: Retryability.NON_RETRYABLE,
+        FailureCode.STRUCTURED_OUTPUT_REFUSAL: Retryability.NON_RETRYABLE,
+        FailureCode.INVOCATION_RATE_LIMITED: Retryability.RETRYABLE,
+        FailureCode.INVOCATION_QUOTA_EXHAUSTED: Retryability.RETRYABLE,
+        FailureCode.TRANSIENT_NETWORK: Retryability.RETRYABLE,
+        FailureCode.PROVIDER_5XX: Retryability.RETRYABLE,
+        FailureCode.PROVIDER_FAILURE: Retryability.NON_RETRYABLE,
+        FailureCode.LOCAL_CANDIDATE_TIMEOUT: Retryability.RETRYABLE,
         FailureCode.LATE_RESPONSE_DISCARDED: Retryability.NON_RETRYABLE,
-        FailureCode.INTERNAL_ERROR: Retryability.UNKNOWN,
+        FailureCode.DEADLINE_EXCEEDED: Retryability.NON_RETRYABLE,
+        FailureCode.NO_ELIGIBLE_CANDIDATE: Retryability.NON_RETRYABLE,
+        FailureCode.POOL_EXHAUSTED: Retryability.NON_RETRYABLE,
+        FailureCode.SMOKE_SKIPPED: Retryability.NON_RETRYABLE,
+        FailureCode.SMOKE_FAILED: Retryability.NON_RETRYABLE,
+        FailureCode.BUDGET_VIOLATION: Retryability.NON_RETRYABLE,
+        FailureCode.MODULE_UNSUPPORTED_VERSION: Retryability.NON_RETRYABLE,
     }
 )
 
 FAILURE_CLASS_BY_CODE: Mapping[FailureCode, FailureClass] = MappingProxyType(
     {
-        FailureCode.INVALID_INVOCATION: FailureClass.VALIDATION,
-        FailureCode.INVALID_CONFIG: FailureClass.CONFIGURATION,
-        FailureCode.UNSUPPORTED_PROVIDER: FailureClass.CAPABILITY,
-        FailureCode.UNSUPPORTED_MODEL_FAMILY: FailureClass.CAPABILITY,
-        FailureCode.UNSUPPORTED_CAPABILITY: FailureClass.CAPABILITY,
-        FailureCode.MISSING_SECRET: FailureClass.CREDENTIAL,
-        FailureCode.SECRET_RESOLUTION_FAILED: FailureClass.CREDENTIAL,
-        FailureCode.SCHEMA_NOT_FOUND: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.SCHEMA_VALIDATION_FAILED: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.POLICY_VIOLATION: FailureClass.POLICY,
-        FailureCode.BUDGET_VIOLATION: FailureClass.POLICY,
-        FailureCode.NO_ELIGIBLE_ENDPOINT: FailureClass.ROUTING,
+        FailureCode.INVALID_ENDPOINT_CONFIG: FailureClass.CONFIGURATION,
+        FailureCode.CREDENTIAL_UNAVAILABLE: FailureClass.CREDENTIAL,
+        FailureCode.UNKNOWN_ROLE: FailureClass.ROUTING,
+        FailureCode.UNKNOWN_ENTRYPOINT: FailureClass.ROUTING,
+        FailureCode.UNSUPPORTED_PROVIDER_FORMAT: FailureClass.CAPABILITY,
         FailureCode.ENDPOINT_SUPPRESSED: FailureClass.ROUTING,
-        FailureCode.POOL_EXHAUSTED: FailureClass.ROUTING,
-        FailureCode.PROVIDER_RATE_LIMITED: FailureClass.PROVIDER_AVAILABILITY,
-        FailureCode.PROVIDER_QUOTA_EXHAUSTED: FailureClass.PROVIDER_AVAILABILITY,
-        FailureCode.PROVIDER_TIMEOUT: FailureClass.PROVIDER_AVAILABILITY,
-        FailureCode.PROVIDER_TRANSIENT_ERROR: FailureClass.PROVIDER_AVAILABILITY,
-        FailureCode.PROVIDER_NON_RETRYABLE_ERROR: FailureClass.PROVIDER_CONTRACT,
-        FailureCode.PROVIDER_REFUSAL: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.MALFORMED_PROVIDER_OUTPUT: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.WRONG_TOOL_OUTPUT: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.DUPLICATE_TERMINAL_OUTPUT: FailureClass.STRUCTURED_OUTPUT,
-        FailureCode.DEADLINE_EXCEEDED: FailureClass.DEADLINE,
+        FailureCode.UNSUPPORTED_RUNTIME_KNOB: FailureClass.CAPABILITY,
+        FailureCode.CAPABILITY_MISMATCH: FailureClass.CAPABILITY,
+        FailureCode.UNSUPPORTED_REASONING_MODE: FailureClass.CAPABILITY,
+        FailureCode.OUTPUT_BUDGET_EXCEEDS_HARD_CAP: FailureClass.POLICY,
+        FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE: FailureClass.POLICY,
+        FailureCode.OPERATION_REF_REQUIRED: FailureClass.POLICY,
+        FailureCode.INVALID_MESSAGES: FailureClass.VALIDATION,
         FailureCode.CANCELLED: FailureClass.CANCELLATION,
+        FailureCode.MISSING_SCHEMA_CONTRACT: FailureClass.STRUCTURED_OUTPUT,
+        FailureCode.UNKNOWN_SCHEMA_CONTRACT: FailureClass.STRUCTURED_OUTPUT,
+        FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD: FailureClass.STRUCTURED_OUTPUT,
+        FailureCode.STRUCTURED_OUTPUT_REFUSAL: FailureClass.STRUCTURED_OUTPUT,
+        FailureCode.INVOCATION_RATE_LIMITED: FailureClass.PROVIDER_AVAILABILITY,
+        FailureCode.INVOCATION_QUOTA_EXHAUSTED: FailureClass.PROVIDER_AVAILABILITY,
+        FailureCode.TRANSIENT_NETWORK: FailureClass.PROVIDER_AVAILABILITY,
+        FailureCode.PROVIDER_5XX: FailureClass.PROVIDER_AVAILABILITY,
+        FailureCode.PROVIDER_FAILURE: FailureClass.PROVIDER_CONTRACT,
+        FailureCode.LOCAL_CANDIDATE_TIMEOUT: FailureClass.DEADLINE,
         FailureCode.LATE_RESPONSE_DISCARDED: FailureClass.DEADLINE,
-        FailureCode.INTERNAL_ERROR: FailureClass.INTERNAL,
+        FailureCode.DEADLINE_EXCEEDED: FailureClass.DEADLINE,
+        FailureCode.NO_ELIGIBLE_CANDIDATE: FailureClass.ROUTING,
+        FailureCode.POOL_EXHAUSTED: FailureClass.ROUTING,
+        FailureCode.SMOKE_SKIPPED: FailureClass.ROUTING,
+        FailureCode.SMOKE_FAILED: FailureClass.PROVIDER_CONTRACT,
+        FailureCode.BUDGET_VIOLATION: FailureClass.POLICY,
+        FailureCode.MODULE_UNSUPPORTED_VERSION: FailureClass.INTERNAL,
     }
 )
 

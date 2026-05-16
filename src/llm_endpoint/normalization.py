@@ -10,17 +10,17 @@ from llm_endpoint.results import FailureCode, PlainTextResult, TerminalResult, T
 NORMALIZER_VERSION = "v1"
 
 _FAILURE_MESSAGES: Mapping[FailureCode, str] = {
-    FailureCode.PROVIDER_RATE_LIMITED: "provider rate limited the request",
-    FailureCode.PROVIDER_QUOTA_EXHAUSTED: "provider quota is exhausted",
-    FailureCode.PROVIDER_TIMEOUT: "provider attempt timed out",
-    FailureCode.PROVIDER_TRANSIENT_ERROR: "provider returned a retryable transient error",
-    FailureCode.PROVIDER_NON_RETRYABLE_ERROR: "provider returned a non-retryable error",
-    FailureCode.PROVIDER_REFUSAL: "provider refused the request",
-    FailureCode.MALFORMED_PROVIDER_OUTPUT: "provider output could not be normalized",
-    FailureCode.WRONG_TOOL_OUTPUT: "provider returned the wrong terminal tool",
-    FailureCode.DUPLICATE_TERMINAL_OUTPUT: "provider returned duplicate terminal outputs",
+    FailureCode.INVOCATION_RATE_LIMITED: "provider rate limited the request",
+    FailureCode.INVOCATION_QUOTA_EXHAUSTED: "provider quota is exhausted",
+    FailureCode.LOCAL_CANDIDATE_TIMEOUT: "provider attempt timed out",
+    FailureCode.TRANSIENT_NETWORK: "provider returned a retryable transient error",
+    FailureCode.PROVIDER_FAILURE: "provider returned a non-retryable error",
+    FailureCode.STRUCTURED_OUTPUT_REFUSAL: "provider refused the request",
+    FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD: "provider output could not be normalized",
+    FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD: "provider returned the wrong terminal tool",
+    FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD: "provider returned duplicate terminal outputs",
     FailureCode.CANCELLED: "provider attempt was cancelled",
-    FailureCode.INTERNAL_ERROR: "module normalization failed",
+    FailureCode.PROVIDER_FAILURE: "provider returned a non-retryable error",
 }
 
 
@@ -46,7 +46,7 @@ def normalize_provider_outcome(
 
     if outcome.failure_code is None:
         return failure(
-            code=FailureCode.INTERNAL_ERROR,
+            code=FailureCode.PROVIDER_FAILURE,
             message="provider failure outcome omitted a failure code",
             operation_invocation_id=operation_invocation_id,
             role=role,
@@ -92,7 +92,7 @@ def _normalize_success(
 ) -> TerminalResult:
     if outcome.payload is None:
         return failure(
-            code=FailureCode.INTERNAL_ERROR,
+            code=FailureCode.PROVIDER_FAILURE,
             message="provider success outcome omitted payload",
             operation_invocation_id=operation_invocation_id,
             endpoint_uid=outcome.endpoint_uid,
@@ -103,7 +103,7 @@ def _normalize_success(
     if isinstance(outcome.payload.content, str):
         if not plain_text_allowed:
             return failure(
-                code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+                code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
                 message="plain text provider output is not allowed for this operation",
                 operation_invocation_id=operation_invocation_id,
                 endpoint_uid=outcome.endpoint_uid,
@@ -120,7 +120,7 @@ def _normalize_success(
         )
 
     return failure(
-        code=FailureCode.MALFORMED_PROVIDER_OUTPUT,
+        code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
         message="structured provider output requires the structured-output pipeline",
         operation_invocation_id=operation_invocation_id,
         endpoint_uid=outcome.endpoint_uid,

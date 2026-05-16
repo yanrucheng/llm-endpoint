@@ -34,7 +34,7 @@ def test_ordered_retryable_failover() -> None:
                     kind=ProviderOutcomeKind.TIMEOUT,
                     endpoint_uid="primary",
                     elapsed_ms=500,
-                    failure_code=FailureCode.PROVIDER_TIMEOUT,
+                    failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
                     safe_provider_status={"status": "timeout"},
                 ),
             ),
@@ -121,7 +121,7 @@ def test_non_retryable_failure_stops_pool() -> None:
                     kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
                     endpoint_uid="primary",
                     elapsed_ms=20,
-                    failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+                    failure_code=FailureCode.PROVIDER_FAILURE,
                     safe_provider_status={"status": "bad_request"},
                 ),
             ),
@@ -137,7 +137,7 @@ def test_non_retryable_failure_stops_pool() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.PROVIDER_NON_RETRYABLE_ERROR
+    assert result.terminal_result.code is FailureCode.PROVIDER_FAILURE
     assert [trace.endpoint_uid for trace in result.attempt_traces] == ["primary"]
     assert adapter.calls_by_endpoint == {"primary": 1}
 
@@ -152,7 +152,7 @@ def test_pool_exhaustion_is_typed_failure() -> None:
                     kind=ProviderOutcomeKind.TIMEOUT,
                     endpoint_uid="primary",
                     elapsed_ms=500,
-                    failure_code=FailureCode.PROVIDER_TIMEOUT,
+                    failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
                 ),
             ),
             "fallback": (
@@ -160,7 +160,7 @@ def test_pool_exhaustion_is_typed_failure() -> None:
                     kind=ProviderOutcomeKind.RETRYABLE_FAILURE,
                     endpoint_uid="fallback",
                     elapsed_ms=700,
-                    failure_code=FailureCode.PROVIDER_TRANSIENT_ERROR,
+                    failure_code=FailureCode.TRANSIENT_NETWORK,
                 ),
             ),
         }
@@ -178,7 +178,7 @@ def test_pool_exhaustion_is_typed_failure() -> None:
     assert result.terminal_result.diagnostics.safe_context == {
         "attempt_count": "2",
         "skipped_count": "0",
-        "last_retryable_failure": "provider_transient_error",
+        "last_retryable_failure": "llm.invocation.transient_network",
     }
     assert [trace.status for trace in result.attempt_traces] == [
         AttemptStatus.RETRYABLE_FAILURE,

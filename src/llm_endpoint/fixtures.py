@@ -100,7 +100,7 @@ CONTRACT_FIXTURES: tuple[ContractFixture, ...] = (
     ContractFixture(
         area=FixtureArea.CONFIG,
         polarity=FixturePolarity.NEGATIVE,
-        name="invalid_config",
+        name="llm.config.invalid_endpoint_config",
         path="tests/fixtures/contracts/config/invalid.json",
         owner="registry-owner",
     ),

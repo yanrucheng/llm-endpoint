@@ -74,9 +74,9 @@ class SecretResolution:
         if self.status is SecretResolutionStatus.RESOLVED:
             raise ValueError("resolved secrets do not produce failures")
         code = (
-            FailureCode.MISSING_SECRET
+            FailureCode.CREDENTIAL_UNAVAILABLE
             if self.status is SecretResolutionStatus.MISSING
-            else FailureCode.SECRET_RESOLUTION_FAILED
+            else FailureCode.CREDENTIAL_UNAVAILABLE
         )
         diagnostics = self.diagnostics or SafeDiagnostics(message="secret resolution failed")
         return failure(
@@ -138,7 +138,7 @@ class SchemaResolution:
             raise ValueError("resolved schemas do not produce failures")
         diagnostics = self.diagnostics or SafeDiagnostics(message="schema resolution failed")
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.UNKNOWN_SCHEMA_CONTRACT,
             message=diagnostics.message,
             operation_invocation_id=operation_invocation_id,
             operation_ref=operation_ref,

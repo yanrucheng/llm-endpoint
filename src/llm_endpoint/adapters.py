@@ -27,7 +27,7 @@ class ProviderOutcomeKind(StrEnum):
     RETRYABLE_FAILURE = "retryable_failure"
     NON_RETRYABLE_FAILURE = "non_retryable_failure"
     TIMEOUT = "timeout"
-    CANCELLED = "cancelled"
+    CANCELLED = "llm.input.cancelled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +128,7 @@ class FakeProviderAdapter:
                 kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
                 endpoint_uid=plan.endpoint_uid,
                 elapsed_ms=0,
-                failure_code=FailureCode.UNSUPPORTED_PROVIDER,
+                failure_code=FailureCode.UNSUPPORTED_PROVIDER_FORMAT,
                 safe_provider_status={"adapter": "fake_provider_format_mismatch"},
             )
 
@@ -140,7 +140,7 @@ class FakeProviderAdapter:
                 kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
                 endpoint_uid=plan.endpoint_uid,
                 elapsed_ms=0,
-                failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+                failure_code=FailureCode.PROVIDER_FAILURE,
                 safe_provider_status={"adapter": "fake_outcome_missing"},
             )
         return outcomes[call_index]
@@ -214,7 +214,7 @@ def execute_provider_attempt(
     )
     if adapter.provider_format is not resolved_plan.provider_format:
         return failure(
-            code=FailureCode.UNSUPPORTED_PROVIDER,
+            code=FailureCode.UNSUPPORTED_PROVIDER_FORMAT,
             message="adapter provider_format does not match endpoint provider_format",
             operation_invocation_id=resolved_plan.operation_invocation_id,
             endpoint_uid=resolved_plan.endpoint_uid,
@@ -228,13 +228,13 @@ def execute_provider_attempt(
             kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
             endpoint_uid=resolved_plan.endpoint_uid,
             elapsed_ms=0,
-            failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            failure_code=FailureCode.PROVIDER_FAILURE,
             safe_provider_status={"adapter_exception": exc.__class__.__name__},
         )
 
     if outcome.endpoint_uid != resolved_plan.endpoint_uid:
         return failure(
-            code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            code=FailureCode.PROVIDER_FAILURE,
             message="adapter returned outcome for a different endpoint_uid",
             operation_invocation_id=resolved_plan.operation_invocation_id,
             endpoint_uid=resolved_plan.endpoint_uid,
@@ -251,7 +251,7 @@ def _resolve_credential(
         return None
     if secret_resolver is None:
         return failure(
-            code=FailureCode.MISSING_SECRET,
+            code=FailureCode.CREDENTIAL_UNAVAILABLE,
             message="secret resolver is required for endpoint credential_ref",
             operation_invocation_id=plan.operation_invocation_id,
             endpoint_uid=plan.endpoint_uid,
@@ -263,7 +263,7 @@ def _resolve_credential(
         resolution = secret_resolver(plan.credential_ref)
     except Exception as exc:  # pragma: no cover - callback implementation is host-owned.
         return failure(
-            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            code=FailureCode.CREDENTIAL_UNAVAILABLE,
             message="secret resolver raised during credential resolution",
             operation_invocation_id=plan.operation_invocation_id,
             endpoint_uid=plan.endpoint_uid,
@@ -275,7 +275,7 @@ def _resolve_credential(
         )
     if resolution.ref != plan.credential_ref:
         return failure(
-            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            code=FailureCode.CREDENTIAL_UNAVAILABLE,
             message="secret resolver returned a mismatched ref",
             operation_invocation_id=plan.operation_invocation_id,
             endpoint_uid=plan.endpoint_uid,
@@ -292,7 +292,7 @@ def _resolve_credential(
         )
     if resolution.secret is None:
         return failure(
-            code=FailureCode.SECRET_RESOLUTION_FAILED,
+            code=FailureCode.CREDENTIAL_UNAVAILABLE,
             message="secret resolver returned resolved status without a secret",
             operation_invocation_id=plan.operation_invocation_id,
             endpoint_uid=plan.endpoint_uid,

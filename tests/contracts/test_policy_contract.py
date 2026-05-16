@@ -49,7 +49,8 @@ def test_policy_override_requires_policy_permission() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.POLICY_VIOLATION
+    assert result.code is FailureCode.UNSUPPORTED_RUNTIME_KNOB
+    assert result.code.value == "llm.endpoint.unsupported_runtime_knob"
 
 
 def test_policy_hard_cap_violation() -> None:
@@ -61,7 +62,8 @@ def test_policy_hard_cap_violation() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.BUDGET_VIOLATION
+    assert result.code is FailureCode.OUTPUT_BUDGET_EXCEEDS_HARD_CAP
+    assert result.code.value == "llm.policy.output_budget_exceeds_hard_cap"
     assert result.context.endpoint_uid == "primary"
 
 

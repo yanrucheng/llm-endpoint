@@ -59,12 +59,12 @@ def test_provider_failure_requires_failure_code() -> None:
         kind=ProviderOutcomeKind.TIMEOUT,
         endpoint_uid="primary",
         elapsed_ms=1_000,
-        failure_code=FailureCode.PROVIDER_TIMEOUT,
+        failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
         safe_provider_status={"status": "timeout"},
     )
 
     assert outcome.kind is ProviderOutcomeKind.TIMEOUT
-    assert outcome.failure_code is FailureCode.PROVIDER_TIMEOUT
+    assert outcome.failure_code is FailureCode.LOCAL_CANDIDATE_TIMEOUT
 
 
 def test_execute_provider_attempt_resolves_credentials_and_token_usage() -> None:
@@ -123,7 +123,7 @@ def test_execute_provider_attempt_missing_secret_is_typed_failure() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.MISSING_SECRET
+    assert result.code is FailureCode.CREDENTIAL_UNAVAILABLE
     assert result.diagnostics.safe_context["secret_ref"] == "secret://primary"
 
 
@@ -148,7 +148,7 @@ def test_execute_provider_attempt_resolver_exception_is_redacted() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.SECRET_RESOLUTION_FAILED
+    assert result.code is FailureCode.CREDENTIAL_UNAVAILABLE
     assert result.diagnostics.safe_context == {
         "secret_ref": "secret://primary",
         "resolver_exception": "RuntimeError",

@@ -59,7 +59,8 @@ def test_phase_5a_rejects_legacy_nightfall_fields_under_zero_bc() -> None:
 
     assert report.ok is False
     assert isinstance(report.failure, TypedFailure)
-    assert report.failure.code is FailureCode.INVALID_INVOCATION
+    assert report.failure.code is FailureCode.UNSUPPORTED_RUNTIME_KNOB
+    assert report.failure.code.value == "llm.endpoint.unsupported_runtime_knob"
     assert report.failure.diagnostics.safe_context["legacy_field_count"] == "2"
 
 
@@ -92,7 +93,8 @@ def test_phase_5b_force_candidate_requires_test_mode() -> None:
     )
 
     assert isinstance(result, TypedFailure)
-    assert result.code is FailureCode.INVALID_INVOCATION
+    assert result.code is FailureCode.UNSUPPORTED_RUNTIME_KNOB
+    assert result.code.value == "llm.endpoint.unsupported_runtime_knob"
 
 
 def test_phase_5b_force_candidate_rewrites_plan_in_test_mode() -> None:
@@ -189,7 +191,7 @@ def test_phase_5f_live_smoke_reports_typed_failed_outcome() -> None:
             kind=ProviderOutcomeKind.NON_RETRYABLE_FAILURE,
             endpoint_uid="primary",
             elapsed_ms=20,
-            failure_code=FailureCode.PROVIDER_NON_RETRYABLE_ERROR,
+            failure_code=FailureCode.PROVIDER_FAILURE,
             safe_provider_status={"provider": "synthetic_failure"},
         )
 
@@ -204,8 +206,8 @@ def test_phase_5f_live_smoke_reports_typed_failed_outcome() -> None:
     assert report.ok is False
     assert report.status is LiveSmokeStatus.FAILED
     assert isinstance(report.failure, TypedFailure)
-    assert report.failure.code is FailureCode.PROVIDER_NON_RETRYABLE_ERROR
-    assert report.events[-1].attributes["reason"] == "provider_non_retryable_error"
+    assert report.failure.code is FailureCode.PROVIDER_FAILURE
+    assert report.events[-1].attributes["reason"] == "llm.invocation.provider_failure"
 
 
 def _request(operation_invocation_id: str) -> InvocationRequest:

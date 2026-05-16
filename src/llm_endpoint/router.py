@@ -52,8 +52,8 @@ class AttemptStatus(StrEnum):
     SUCCESS = "success"
     RETRYABLE_FAILURE = "retryable_failure"
     TERMINAL_FAILURE = "terminal_failure"
-    CANCELLED = "cancelled"
-    LATE_RESPONSE_DISCARDED = "late_response_discarded"
+    CANCELLED = "llm.input.cancelled"
+    LATE_RESPONSE_DISCARDED = "llm.invocation.late_response_discarded"
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,7 +164,7 @@ def route_invocation(
         )
         if adapter is None:
             terminal = failure(
-                code=FailureCode.UNSUPPORTED_PROVIDER,
+                code=FailureCode.UNSUPPORTED_PROVIDER_FORMAT,
                 message="no provider adapter registered for endpoint provider_format",
                 operation_invocation_id=plan.operation_invocation_id,
                 role=plan.role,
@@ -313,7 +313,7 @@ def _terminal_result(
     if plan.effective_config.structured_output_mode is not StructuredOutputMode.NONE:
         if schema is None:
             return failure(
-                code=FailureCode.SCHEMA_NOT_FOUND,
+                code=FailureCode.MISSING_SCHEMA_CONTRACT,
                 message=(
                     "structured-output invocation requires resolved schema before normalization"
                 ),
@@ -357,7 +357,7 @@ def _resolve_schema(
         return None
     if not plan.schema_contract_ref:
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.MISSING_SCHEMA_CONTRACT,
             message="structured-output invocation requires a schema_contract_ref",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -366,7 +366,7 @@ def _resolve_schema(
         )
     if schema_resolver is None:
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.UNKNOWN_SCHEMA_CONTRACT,
             message="schema resolver is required for structured-output invocation",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -378,7 +378,7 @@ def _resolve_schema(
         resolution = schema_resolver(plan.schema_contract_ref)
     except Exception as exc:  # pragma: no cover - callback implementation is host-owned.
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.UNKNOWN_SCHEMA_CONTRACT,
             message="schema resolver raised during schema resolution",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -391,7 +391,7 @@ def _resolve_schema(
         )
     if resolution.ref != plan.schema_contract_ref:
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.UNKNOWN_SCHEMA_CONTRACT,
             message="schema resolver returned a mismatched ref",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -409,7 +409,7 @@ def _resolve_schema(
         )
     if resolution.schema is None:
         return failure(
-            code=FailureCode.SCHEMA_NOT_FOUND,
+            code=FailureCode.UNKNOWN_SCHEMA_CONTRACT,
             message="schema resolver returned resolved status without a schema",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,

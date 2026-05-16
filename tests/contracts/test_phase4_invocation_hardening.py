@@ -151,13 +151,13 @@ def test_phase_4b_late_provider_success_is_discarded_without_failover() -> None:
 
 def test_phase_4c_fake_provider_harness_covers_required_scenarios() -> None:
     scenarios = {
-        FakeProviderScenario.RATE_LIMIT: FailureCode.PROVIDER_RATE_LIMITED,
-        FakeProviderScenario.QUOTA: FailureCode.PROVIDER_QUOTA_EXHAUSTED,
-        FakeProviderScenario.TIMEOUT: FailureCode.PROVIDER_TIMEOUT,
-        FakeProviderScenario.TRANSIENT_NETWORK: FailureCode.PROVIDER_TRANSIENT_ERROR,
-        FakeProviderScenario.SERVER_5XX: FailureCode.PROVIDER_TRANSIENT_ERROR,
-        FakeProviderScenario.REFUSAL: FailureCode.PROVIDER_REFUSAL,
-        FakeProviderScenario.DUPLICATE_TERMINAL_TOOL: FailureCode.DUPLICATE_TERMINAL_OUTPUT,
+        FakeProviderScenario.RATE_LIMIT: FailureCode.INVOCATION_RATE_LIMITED,
+        FakeProviderScenario.QUOTA: FailureCode.INVOCATION_QUOTA_EXHAUSTED,
+        FakeProviderScenario.TIMEOUT: FailureCode.LOCAL_CANDIDATE_TIMEOUT,
+        FakeProviderScenario.TRANSIENT_NETWORK: FailureCode.TRANSIENT_NETWORK,
+        FakeProviderScenario.SERVER_5XX: FailureCode.PROVIDER_5XX,
+        FakeProviderScenario.REFUSAL: FailureCode.STRUCTURED_OUTPUT_REFUSAL,
+        FakeProviderScenario.DUPLICATE_TERMINAL_TOOL: FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
     }
 
     outcomes = {
@@ -224,7 +224,7 @@ def test_phase_4c_fake_provider_harness_drives_structured_failures() -> None:
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.WRONG_TOOL_OUTPUT
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
 
 
 def test_phase_4d_role_health_reports_available_and_degraded_states() -> None:
@@ -291,7 +291,7 @@ def test_phase_4e_debug_replay_artifact_is_redacted_and_reproducible() -> None:
     assert artifact.endpoint_plan[0]["credential_ref_present"] == "true"
     assert artifact.fake_provider_reproduction["scenario"] == "late_response"
     assert artifact.typed_failure is not None
-    assert artifact.typed_failure["failure_code"] == "late_response_discarded"
+    assert artifact.typed_failure["failure_code"] == "llm.invocation.late_response_discarded"
     sections = (
         artifact.endpoint_plan
         + artifact.capability_profiles

@@ -107,7 +107,7 @@ def _legacy_field_failure(migration_request: DirectMigrationRequest) -> TypedFai
 
     request = migration_request.request
     return failure(
-        code=FailureCode.INVALID_INVOCATION,
+        code=FailureCode.UNSUPPORTED_RUNTIME_KNOB,
         message="legacy provider fields are prohibited under Zero BC migration",
         operation_invocation_id=request.operation_invocation_id or "migration-readiness",
         role=request.role or None,

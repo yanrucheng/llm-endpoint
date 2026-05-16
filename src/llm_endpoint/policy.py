@@ -100,10 +100,19 @@ def resolve_policy(
 
     try:
         resolved_role = registry.resolve_role(role)
+    except KeyError as exc:
+        return failure(
+            code=FailureCode.UNKNOWN_ROLE,
+            message=str(exc),
+            operation_invocation_id=operation_invocation_id,
+            role=role,
+            operation_ref=operation_ref,
+        )
+    try:
         policy = registry.resolve_operation_policy(operation_ref)
     except KeyError as exc:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.UNKNOWN_ENTRYPOINT,
             message=str(exc),
             operation_invocation_id=operation_invocation_id,
             role=role,
@@ -113,7 +122,7 @@ def resolve_policy(
     overrides = caller_overrides or CallerPolicyOverrides()
     if overrides != CallerPolicyOverrides() and not policy.allow_caller_overrides:
         return failure(
-            code=FailureCode.POLICY_VIOLATION,
+            code=FailureCode.UNSUPPORTED_RUNTIME_KNOB,
             message="caller overrides are not allowed for this operation policy",
             operation_invocation_id=operation_invocation_id,
             role=role,
@@ -288,7 +297,7 @@ def _validate_effective_config(
         profile = capability_catalog.get(endpoint.provider_format, endpoint.model_family)
         if profile is None:
             return failure(
-                code=FailureCode.UNSUPPORTED_MODEL_FAMILY,
+                code=FailureCode.CAPABILITY_MISMATCH,
                 message="endpoint model family is not in the capability catalog",
                 operation_invocation_id=operation_invocation_id,
                 role=role,
@@ -297,7 +306,7 @@ def _validate_effective_config(
             )
         if effective.max_output_tokens > profile.hard_limits.max_output_tokens:
             return failure(
-                code=FailureCode.BUDGET_VIOLATION,
+                code=FailureCode.OUTPUT_BUDGET_EXCEEDS_HARD_CAP,
                 message="max_output_tokens exceeds provider hard limit",
                 operation_invocation_id=operation_invocation_id,
                 role=role,
@@ -309,7 +318,7 @@ def _validate_effective_config(
             and effective.deadline_ms > profile.hard_limits.max_deadline_ms
         ):
             return failure(
-                code=FailureCode.BUDGET_VIOLATION,
+                code=FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE,
                 message="deadline_ms exceeds provider hard limit",
                 operation_invocation_id=operation_invocation_id,
                 role=role,
@@ -318,7 +327,7 @@ def _validate_effective_config(
             )
         if not profile.supports_reasoning_mode(effective.reasoning_mode):
             return failure(
-                code=FailureCode.UNSUPPORTED_CAPABILITY,
+                code=FailureCode.UNSUPPORTED_REASONING_MODE,
                 message="reasoning mode is not supported by endpoint capability profile",
                 operation_invocation_id=operation_invocation_id,
                 role=role,
@@ -327,7 +336,7 @@ def _validate_effective_config(
             )
         if not profile.supports_structured_output(effective.structured_output_mode):
             return failure(
-                code=FailureCode.UNSUPPORTED_CAPABILITY,
+                code=FailureCode.CAPABILITY_MISMATCH,
                 message="structured output mode is not supported by endpoint capability profile",
                 operation_invocation_id=operation_invocation_id,
                 role=role,
@@ -344,7 +353,7 @@ def _budget_failure(
     operation_invocation_id: str,
 ) -> TypedFailure:
     return failure(
-        code=FailureCode.BUDGET_VIOLATION,
+        code=FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE,
         message=message,
         operation_invocation_id=operation_invocation_id,
         role=role,

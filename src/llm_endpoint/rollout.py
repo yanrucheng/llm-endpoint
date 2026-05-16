@@ -60,7 +60,7 @@ def apply_rollout_controls(
     }
     if len(suppressed) == len(effective_plan.endpoint_uids):
         return failure(
-            code=FailureCode.NO_ELIGIBLE_ENDPOINT,
+            code=FailureCode.NO_ELIGIBLE_CANDIDATE,
             message="rollout controls disabled every candidate endpoint",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -93,7 +93,7 @@ def _validate_forced_endpoint(
 
     if not controls.test_mode:
         return failure(
-            code=FailureCode.INVALID_INVOCATION,
+            code=FailureCode.UNSUPPORTED_RUNTIME_KNOB,
             message="forced endpoint selection is allowed only in test mode",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
@@ -102,7 +102,7 @@ def _validate_forced_endpoint(
         )
     if forced not in plan.endpoint_uids:
         return failure(
-            code=FailureCode.NO_ELIGIBLE_ENDPOINT,
+            code=FailureCode.NO_ELIGIBLE_CANDIDATE,
             message="forced endpoint is not in the planned candidate pool",
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,

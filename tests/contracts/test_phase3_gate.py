@@ -116,9 +116,12 @@ def test_phase_3_gate_preserves_active_config_and_returns_typed_failures() -> No
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
-    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
     assert result.terminal_result.is_retryable is False
-    assert result.telemetry[-1].attributes["failure_code"] == "schema_validation_failed"
+    assert (
+        result.telemetry[-1].attributes["failure_code"]
+        == "llm.structured_output.invalid_payload"
+    )
 
 
 def _answer_schema(ref: str):
