@@ -32,8 +32,10 @@ def test_policy_resolution_contract() -> None:
     assert result.endpoint_uids == ("primary", "fallback")
     assert result.effective_config.max_output_tokens == 512
     assert result.effective_config.candidate_budget_ms == 4_000
+    assert result.effective_config.protect_last_eligible is True
     assert result.provenance["max_output_tokens"] is PolicySource.CALLER_OVERRIDE
     assert result.provenance["candidate_budget_ms"] is PolicySource.POLICY
+    assert result.provenance["protect_last_eligible"] is PolicySource.POLICY
     assert len(result.policy_fingerprint) == 64
     assert result.telemetry.family is TelemetryEventFamily.POLICY_RESOLVED
     assert result.telemetry.context.policy_fingerprint == result.policy_fingerprint
@@ -140,7 +142,7 @@ def _config(
                 max_output_tokens=max_output_tokens,
                 reasoning_mode=ReasoningMode.MEDIUM,
                 candidate_budget_ms=4_000,
-                failover_reserve_ms=1_000,
+                protect_last_eligible=True,
                 structured_output_mode=StructuredOutputMode.JSON_SCHEMA,
                 allow_caller_overrides=allow_overrides,
             ),

@@ -206,6 +206,10 @@ cython_debug/
 # .vscode/
 /.trae/
 
+# Eval session raw outputs
+eval/**/outputs/*
+!eval/**/outputs/.gitkeep
+
 # Ruff stuff:
 .ruff_cache/
 

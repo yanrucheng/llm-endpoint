@@ -64,7 +64,6 @@ class ConfigErrorCode(StrEnum):
     INVALID_DEADLINE = "invalid_deadline"
     INVALID_OUTPUT_BUDGET = "invalid_output_budget"
     INVALID_CANDIDATE_BUDGET = "invalid_candidate_budget"
-    INVALID_FAILOVER_RESERVE = "invalid_failover_reserve"
     INVALID_SCHEMA_REF = "invalid_schema_ref"
     INVALID_CREDENTIAL_REF = "invalid_credential_ref"
     INVALID_CAPABILITY_REF = "invalid_capability_ref"
@@ -122,7 +121,7 @@ class OperationRuntimePolicy:
     max_output_tokens: int
     reasoning_mode: ReasoningMode = ReasoningMode.DISABLED
     candidate_budget_ms: int | None = None
-    failover_reserve_ms: int = 0
+    protect_last_eligible: bool = False
     structured_output_mode: StructuredOutputMode = StructuredOutputMode.NONE
     allow_caller_overrides: bool = False
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
@@ -575,22 +574,6 @@ def _validate_policy(
                 ConfigErrorCode.INVALID_CANDIDATE_BUDGET,
                 f"{path}.candidate_budget_ms",
                 "candidate_budget_ms must be omitted or positive",
-            )
-        )
-    if policy.failover_reserve_ms < 0 or policy.failover_reserve_ms >= policy.deadline_ms:
-        errors.append(
-            _error(
-                ConfigErrorCode.INVALID_FAILOVER_RESERVE,
-                f"{path}.failover_reserve_ms",
-                "failover_reserve_ms must be non-negative and below deadline_ms",
-            )
-        )
-    if policy.structured_output_mode is StructuredOutputMode.PROMPT_JSON:
-        errors.append(
-            _error(
-                ConfigErrorCode.INVALID_STRUCTURED_OUTPUT,
-                f"{path}.structured_output_mode",
-                "prompt_json is a last-resort mode and is not accepted in the Phase 1 contract",
             )
         )
     if policy.retry_policy.max_attempts <= 0:

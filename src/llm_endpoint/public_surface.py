@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.prd-remediation-p3c"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.prd-remediation-final-gate"
 
 
 class CompatibilityLevel(StrEnum):
@@ -64,7 +64,10 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         name="llm_endpoint.config",
         kind=SurfaceKind.CONFIG_SCHEMA,
         owner="registry-owner",
-        version_rule="Only config_schema_version == 'v1' is accepted; no legacy loaders.",
+        version_rule=(
+            "Only config_schema_version == 'v1' is accepted; prompt_json and "
+            "protect_last_eligible are clean-slate V1 fields; no legacy loaders."
+        ),
         positive_fixture="tests/contracts/test_config_contract.py::test_valid_config_contract",
         negative_fixture="tests/contracts/test_config_contract.py::test_invalid_config_contract",
     ),
@@ -94,7 +97,10 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         name="llm_endpoint.invocation",
         kind=SurfaceKind.API,
         owner="api-owner",
-        version_rule="Invocation facade v1 is direct API only; no compatibility facade.",
+        version_rule=(
+            "Invocation facade v1 is direct sync API only; no compatibility facade "
+            "or module-owned async shim."
+        ),
         positive_fixture="tests/contracts/test_invocation_contract.py::test_invocation_plan_contract",
         negative_fixture="tests/contracts/test_invocation_contract.py::test_invalid_invocation_returns_typed_failure",
     ),
@@ -198,7 +204,8 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         kind=SurfaceKind.ROUTER,
         owner="runtime-owner",
         version_rule=(
-            "Deadline pool router v1 is clean-slate; no legacy routing or fallback modes."
+            "Deadline pool router v1 uses protect_last_eligible as the public "
+            "last-candidate protection field; no legacy routing or fallback modes."
         ),
         positive_fixture="tests/contracts/test_router_contract.py::test_ordered_retryable_failover",
         negative_fixture="tests/contracts/test_router_contract.py::test_pool_exhaustion_is_typed_failure",

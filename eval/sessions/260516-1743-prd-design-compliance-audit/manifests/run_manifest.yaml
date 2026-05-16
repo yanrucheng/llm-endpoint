@@ -1,0 +1,19 @@
+session_id: 260516-1743-prd-design-compliance-audit
+task_type: design-compliance-audit
+dataset:
+  name: prd-260516-1321-llm-endpoint-module
+  location: docs/prd/prd-260516-1321-llm-endpoint-module.md
+  fingerprint: "manual-static-review"
+runner:
+  entrypoint: "manual static audit via repository inspection"
+  commit: "30563a4"
+parameters:
+  maturity_mode: "pre-production"
+  backward_compatibility_policy: "zero-bc"
+  scope: "Compare current repository implementation and tests against the standalone V1 PRD product contract."
+outputs:
+  directory: eval/sessions/260516-1743-prd-design-compliance-audit/outputs
+  primary_report: report.md
+  raw_artifacts: "none"
+decision:
+  report: report.md

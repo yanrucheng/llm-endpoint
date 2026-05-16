@@ -25,7 +25,7 @@ Technical goals:
 | ID | Goal | PRD Trace |
 |---|---|---|
 | TG1 | Define a stable module boundary for role + operation invocation, endpoint registry resolution, provider execution, typed results, typed failures, and redacted telemetry. | G1, G2, G3, Public Surface Contract |
-| TG2 | Centralize runtime policy resolution so output budget, reasoning control, candidate budget, deadline, structured-output mode, retry, and failover reserve are validated together. | G4, Configuration Precedence |
+| TG2 | Centralize runtime policy resolution so output budget, reasoning control, candidate budget, deadline, structured-output mode, retry, and last-candidate protection are validated together. | G4, Configuration Precedence |
 | TG3 | Validate configuration, capabilities, schema contracts, secrets, and routing compatibility before live invocation where possible. | G5, Acceptance Criteria |
 | TG4 | Preserve deadline and cancellation integrity across ordered pool failover and late provider responses. | G6, Async/Cancellation, Pool Router |
 | TG5 | Emit comparable, redacted, request-correlated telemetry, attempt traces, smoke results, and debug replay artifacts across repos. | G7, Telemetry, Debug Replay |
@@ -166,7 +166,7 @@ Logical entities:
 | Role | Host-defined semantic alias resolving to one endpoint or ordered pool. | Role names are host vocabulary; pool membership validates before activation. |
 | Endpoint Pool | Ordered candidate list with suppression and eligibility state. | Empty pools and duplicate UIDs fail validation. |
 | Operation | Host-defined invocation pattern bound to runtime policy and optional schema contract. | Invocation requires an operation ref; no migration mode is active. |
-| Operation Runtime Policy | Output budget, reasoning mode, candidate budget shape, failover reserve, retry rules, structured-output mode, and override rules. | Effective values must have provenance and respect hard constraints. |
+| Operation Runtime Policy | Output budget, reasoning mode, candidate budget shape, last-candidate protection, retry rules, structured-output mode, and override rules. | Effective values must have provenance and respect hard constraints. |
 | Effective Runtime Config | Immutable resolved runtime values plus provenance. | Cannot silently include values from env/secret refs as behavior overrides. |
 | Capability Profile | Provider-format x model-family facts and evidence. | Unknown family fails closed or uses conservative capabilities. |
 | Schema Contract | Stable schema name/version/fingerprint plus validator and extraction mode. | Structured success requires schema identity and validation. |

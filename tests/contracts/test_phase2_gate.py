@@ -117,7 +117,7 @@ def _config(config_schema_version: str = "v1") -> LLMEndpointConfig:
                 deadline_ms=10_000,
                 max_output_tokens=1_024,
                 candidate_budget_ms=4_000,
-                failover_reserve_ms=1_000,
+                protect_last_eligible=True,
                 structured_output_mode=StructuredOutputMode.JSON_SCHEMA,
             ),
         ),

@@ -29,7 +29,7 @@ class PolicyField(StrEnum):
     MAX_OUTPUT_TOKENS = "max_output_tokens"
     REASONING_MODE = "reasoning_mode"
     CANDIDATE_BUDGET_MS = "candidate_budget_ms"
-    FAILOVER_RESERVE_MS = "failover_reserve_ms"
+    PROTECT_LAST_ELIGIBLE = "protect_last_eligible"
     STRUCTURED_OUTPUT_MODE = "structured_output_mode"
     RETRY_CLASS = "retry_class"
     MAX_ATTEMPTS = "max_attempts"
@@ -61,7 +61,7 @@ class EffectiveRuntimeConfig:
     max_output_tokens: int
     reasoning_mode: ReasoningMode
     candidate_budget_ms: int
-    failover_reserve_ms: int
+    protect_last_eligible: bool
     structured_output_mode: StructuredOutputMode
     retry_class: str
     max_attempts: int
@@ -206,13 +206,13 @@ def _effective_config(
     deadline_ms = overrides.deadline_ms or policy.deadline_ms
     candidate_budget_ms = overrides.candidate_budget_ms or policy.candidate_budget_ms
     if candidate_budget_ms is None:
-        candidate_budget_ms = max(1, deadline_ms - policy.failover_reserve_ms)
+        candidate_budget_ms = deadline_ms
     return EffectiveRuntimeConfig(
         deadline_ms=deadline_ms,
         max_output_tokens=overrides.max_output_tokens or policy.max_output_tokens,
         reasoning_mode=overrides.reasoning_mode or policy.reasoning_mode,
         candidate_budget_ms=candidate_budget_ms,
-        failover_reserve_ms=policy.failover_reserve_ms,
+        protect_last_eligible=policy.protect_last_eligible,
         structured_output_mode=policy.structured_output_mode,
         retry_class=policy.retry_policy.retry_class.value,
         max_attempts=policy.retry_policy.max_attempts,
@@ -246,7 +246,7 @@ def _provenance(
             if policy.candidate_budget_ms is not None
             else PolicySource.DERIVED
         ),
-        PolicyField.FAILOVER_RESERVE_MS.value: PolicySource.POLICY,
+        PolicyField.PROTECT_LAST_ELIGIBLE.value: PolicySource.POLICY,
         PolicyField.STRUCTURED_OUTPUT_MODE.value: PolicySource.POLICY,
         PolicyField.RETRY_CLASS.value: PolicySource.POLICY,
         PolicyField.MAX_ATTEMPTS.value: PolicySource.POLICY,
@@ -284,14 +284,6 @@ def _validate_effective_config(
             operation_ref,
             operation_invocation_id,
         )
-    if effective.failover_reserve_ms < 0 or effective.failover_reserve_ms >= effective.deadline_ms:
-        return _budget_failure(
-            "failover_reserve_ms must be below deadline_ms",
-            role,
-            operation_ref,
-            operation_invocation_id,
-        )
-
     for endpoint_uid in endpoint_uids:
         endpoint = registry.endpoints_by_uid[endpoint_uid]
         profile = capability_catalog.get(endpoint.provider_format, endpoint.model_family)

@@ -17,6 +17,7 @@ def test_default_catalog_lookup() -> None:
     assert profile.hard_limits.max_output_tokens == 8_192
     assert profile.supports_reasoning_mode(ReasoningMode.HIGH)
     assert profile.supports_structured_output(StructuredOutputMode.JSON_SCHEMA)
+    assert profile.supports_structured_output(StructuredOutputMode.PROMPT_JSON)
 
 
 def test_unknown_model_family_fails_closed() -> None:

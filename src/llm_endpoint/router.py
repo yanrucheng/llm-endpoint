@@ -320,7 +320,11 @@ def _should_skip_suppressed(
 
 def _candidate_budget(plan: InvocationPlan, candidate_index: int, remaining_ms: int) -> int:
     has_later_candidate = candidate_index < len(plan.endpoint_uids) - 1
-    reserve = plan.effective_config.failover_reserve_ms if has_later_candidate else 0
+    reserve = (
+        plan.effective_config.candidate_budget_ms
+        if has_later_candidate and plan.effective_config.protect_last_eligible
+        else 0
+    )
     available_ms = max(1, remaining_ms - reserve)
     return min(plan.effective_config.candidate_budget_ms, available_ms)
 

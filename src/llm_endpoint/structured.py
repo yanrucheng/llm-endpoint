@@ -236,7 +236,7 @@ def _extract_payload(
                     "tool_name": payload.tool_name or "",
                 },
             )
-    elif context.mode is not StructuredOutputMode.JSON_SCHEMA:
+    elif context.mode not in (StructuredOutputMode.JSON_SCHEMA, StructuredOutputMode.PROMPT_JSON):
         return failure(
             code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="unsupported structured-output extraction mode",

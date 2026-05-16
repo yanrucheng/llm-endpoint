@@ -221,6 +221,36 @@ def test_tool_call_mode_rejects_wrong_terminal_tool() -> None:
     assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
 
 
+def test_prompt_json_mode_validates_extracted_payload() -> None:
+    registry = build_registry(_config(mode=StructuredOutputMode.PROMPT_JSON))
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_success(
+                    endpoint_uid="primary",
+                    elapsed_ms=24,
+                    content={"answer": "ok"},
+                ),
+            )
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters={ProviderFormat.FAKE: adapter},
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+        schema_resolver=_answer_schema,
+    )
+
+    assert isinstance(result.terminal_result, StructuredResult)
+    assert result.terminal_result.value == {"answer": "ok"}
+    success_event = result.telemetry[-1]
+    assert success_event.attributes["structured_output_mode"] == "prompt_json"
+    assert success_event.context.schema_contract_ref == "schema://answer/v1"
+
+
 def _answer_schema(ref: str) -> SchemaResolution:
     return resolved_schema(
         ref=ref,

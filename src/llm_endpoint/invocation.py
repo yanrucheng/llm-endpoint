@@ -33,7 +33,7 @@ INVOCATION_FACADE_VERSION = "v1"
 
 
 class CancellationToken(Protocol):
-    """Host-owned cancellation signal shared by sync and async invocation paths."""
+    """Host-owned cancellation signal for the sync V1 invocation path."""
 
     def is_cancelled(self) -> bool:
         """Return true once the caller has cancelled the operation."""

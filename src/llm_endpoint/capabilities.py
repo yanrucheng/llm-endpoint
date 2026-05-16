@@ -14,6 +14,7 @@ class CapabilityFlag(StrEnum):
     """Provider/model-family facts consumed by planning and policy resolution."""
 
     STRUCTURED_JSON_SCHEMA = "structured_json_schema"
+    STRUCTURED_PROMPT_JSON = "structured_prompt_json"
     STRUCTURED_TOOL_CALL = "structured_tool_call"
     REASONING_CONTROL = "reasoning_control"
     TOKEN_USAGE = "token_usage"
@@ -76,6 +77,8 @@ class CapabilityProfile:
             return True
         if mode is StructuredOutputMode.JSON_SCHEMA:
             return CapabilityFlag.STRUCTURED_JSON_SCHEMA in self.supported_capabilities
+        if mode is StructuredOutputMode.PROMPT_JSON:
+            return CapabilityFlag.STRUCTURED_PROMPT_JSON in self.supported_capabilities
         if mode is StructuredOutputMode.TOOL_CALL:
             return CapabilityFlag.STRUCTURED_TOOL_CALL in self.supported_capabilities
         return False
@@ -134,6 +137,7 @@ DEFAULT_CAPABILITY_CATALOG = CapabilityCatalog(
             supported_capabilities=frozenset(
                 {
                     CapabilityFlag.STRUCTURED_JSON_SCHEMA,
+                    CapabilityFlag.STRUCTURED_PROMPT_JSON,
                     CapabilityFlag.STRUCTURED_TOOL_CALL,
                     CapabilityFlag.TOKEN_USAGE,
                 }

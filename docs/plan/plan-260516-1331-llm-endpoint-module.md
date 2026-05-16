@@ -2,7 +2,7 @@
 id: "plan-260516-1331-llm-endpoint-module"
 title: "LLM Endpoint Module Development Plan"
 type: plan
-status: draft
+status: archived
 created: 2026-05-16
 updated: 2026-05-16
 parent: "index-plan"
@@ -20,6 +20,7 @@ dev-unit-size: "0.5 developer-day"
 > Source: `docs/design/design-260516-1331-llm-endpoint-module.md`
 > Dev unit size: 0.5 developer-day
 > Planning scope: 14 components, 5 phases, 7 max parallel tracks
+> Lifecycle: Completed implementation baseline; retained for historical evidence. Follow-up PRD compliance remediation is tracked separately.
 
 ## Planning Basis
 
@@ -288,7 +289,7 @@ graph LR
 |---|---|---|
 | First required provider-format set is not finalized. | Consuming repo owners | P3A adapter scope and P2B capability profiles may change. |
 | Canonical schema fingerprint format is not finalized. | Module maintainer | P1E, P3C, telemetry fixtures, and debug artifacts need stable identity. |
-| Sync/async cancellation representation is not finalized. | Module maintainer | P2F and P4B public API fixtures may split by API style. |
+| Sync/async cancellation representation is resolved by remediation. | Module maintainer | V1 is sync-only; host-owned async wrapping is outside the module contract. |
 | Exact Nightfall direct-API migration inventory is not selected. | Nightfall owner + module maintainer | P5A scope must stay narrow and avoid facade support. |
 | Distribution path is not selected. | Module maintainer | P5E pinning and rollback guidance remains provisional. |
 | Runtime config reload need is not confirmed. | Module maintainer + consuming repo owners | If required, P3D must implement explicit validated replacement; otherwise reload remains non-V1. |
@@ -307,6 +308,7 @@ graph LR
 
 | Date | Change |
 |---|---|
+| 2026-05-16 | Archived as completed implementation baseline after all phase gates passed; follow-up PRD compliance remediation moved to a separate plan. |
 | 2026-05-16 | Passed Phase 5 final gate by verifying direct migration, rollout controls, Zero BC release guard, consumer contract pack, adoption guide, optional live smoke, and final quality checks. |
 | 2026-05-16 | Passed Phase 4 gate by verifying plain-text invocation, cancellation and late-response semantics, deterministic fake-provider scenarios, role health, debug replay artifacts, and Zero BC public surface coverage. |
 | 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning facade, offline smoke API shell, and contract coverage. |

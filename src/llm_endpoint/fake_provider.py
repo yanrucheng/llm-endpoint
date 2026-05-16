@@ -41,7 +41,7 @@ class FakeProviderScenario(StrEnum):
 
 @dataclass(slots=True)
 class FakeCancellationToken:
-    """Test-owned cancellation token usable by sync and async invocation paths."""
+    """Test-owned cancellation token for deterministic sync route tests."""
 
     cancelled: bool = False
 

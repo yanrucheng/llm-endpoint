@@ -43,6 +43,13 @@ Required consumer actions:
   before accepting a replacement.
 - Run `build_consumer_contract_pack()` and execute every listed test selector.
 
+PRD compliance remediation updates:
+
+- Use exact PRD `llm.*` failure-code strings as the public contract.
+- Use `protect_last_eligible` for last-candidate protection; do not configure `failover_reserve_ms`.
+- Treat `prompt_json` as a supported structured-output mode with schema validation.
+- Treat V1 invocation as sync-only; async wrapping is host-owned and must preserve module cancellation/deadline semantics.
+
 ## Host Responsibilities
 
 The host repository owns environment-specific boundaries. The module owns public

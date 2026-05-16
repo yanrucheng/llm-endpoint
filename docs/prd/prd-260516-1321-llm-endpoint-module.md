@@ -66,7 +66,7 @@ The host owns product behavior.
 | G1 | Provide one durable endpoint vocabulary across repos: endpoint UID, provider format, model family, capability profile, role, operation, runtime policy, schema contract identity, typed result, and typed failure | P0 |
 | G2 | Let consumer code invoke models through role + operation, not raw provider/model/base-url/credential tuples | P0 |
 | G3 | Return only validated typed results, plain text results, or normalized typed failures; raw provider payloads must never be returned as success | P0 |
-| G4 | Co-design `max_tokens`, reasoning control, candidate budget, operation deadline, structured-output mode, and failover reserve inside one operation runtime policy | P0 |
+| G4 | Co-design `max_tokens`, reasoning control, candidate budget, operation deadline, structured-output mode, and last-candidate protection inside one operation runtime policy | P0 |
 | G5 | Validate provider capability, runtime policy, structured-output mode, credential references, schema contract identity, and routing compatibility before live invocation where possible | P0 |
 | G6 | Honor caller-bound operation deadlines, cancellation, and local candidate timeouts without late-response corruption | P0 |
 | G7 | Emit redacted, normalized telemetry with request correlation, attempt traces, token usage when available, and comparable failure classes across repos | P0 |
@@ -105,7 +105,7 @@ V1 Migration Hardening is required to migrate Nightfall and the first consumer r
 | Structured output | Tool-call/schema/prompt-JSON extraction modes when configured, schema contract identity, validation handoff, typed invalid-payload/refusal failures |
 | Plain text mode | Deadline, cancellation, telemetry, redaction, typed failures, and provider normalization without requiring fake schemas |
 | Deadline failover | Deterministic ordered pools, retryable-only fallback, candidate budget allocator, hard local timeout, late-response discard |
-| Async/cancellation | Documented sync/async behavior, caller cancellation semantics, deadline expiry semantics, no fallback after caller cancellation |
+| Async/cancellation | Sync-only V1 behavior, host-owned async wrapping boundary, caller cancellation semantics, deadline expiry semantics, no fallback after caller cancellation |
 | Fake providers | Deterministic harness for rate limit, quota exhaustion, timeout, transient network, provider 5xx, refusal, malformed JSON, wrong tool, duplicate terminal tool, schema violation, late response, cancellation, and pool exhaustion |
 | Migration extraction | Direct call-site migration from Nightfall-style role model handles to canonical invocation; no compatibility facade |
 | Contract tests | Consumer-facing fixtures for config validation, failure taxonomy, telemetry redaction, structured output, and pool simulation |
@@ -211,7 +211,7 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 | Capability profile | Provider-format x model-family facts: required fields, allowed knobs, structured-output support, reasoning modes, streaming support, output hard cap, caveats, evidence |
 | Role | Host-defined semantic alias resolving to one UID or an ordered endpoint pool |
 | Operation | Host-defined named invocation pattern bound to a runtime policy and optional schema contract |
-| Operation runtime policy | Validated bundle of output budget, reasoning mode, candidate budget shape, failover reserve, structured-output mode, retry policy, and override rules |
+| Operation runtime policy | Validated bundle of output budget, reasoning mode, candidate budget shape, last-candidate protection, structured-output mode, retry policy, and override rules |
 | Effective runtime config | Immutable resolved runtime values plus provenance for each value |
 | Schema contract identity | Stable schema name/version/fingerprint used in validation, smoke, telemetry, and debug artifacts |
 | Operation deadline | Caller-bound wall-clock budget for one logical invocation, including failover attempts |
@@ -233,7 +233,7 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 | Intent in, provider details out | Caller expresses role + operation + messages + schema? + deadline; provider construction stays behind the module |
 | V1 spine over platform breadth | Build the durable execution path first; do not force every platform feature into initial migration |
 | Validate early, fail closed | Invalid configs, unsupported knobs, incompatible capabilities, unsafe schemas, and missing secrets fail before live calls where possible |
-| Runtime budgets are one contract | `max_tokens`, reasoning, timeout, structured-output mode, retry policy, and failover reserve must be resolved together |
+| Runtime budgets are one contract | `max_tokens`, reasoning, timeout, structured-output mode, retry policy, and last-candidate protection must be resolved together |
 | Structured output is a trust boundary | No raw provider payload becomes structured success without extraction and validation |
 | Plain text is first-class | Conversational calls still receive deadlines, failures, telemetry, and redaction without fake schemas |
 | Domain-agnostic core | The module ships machinery, not consumer vocabulary, prompts, schemas, eval truth, or business behavior |
@@ -389,7 +389,7 @@ If two behavior sources conflict, the stricter safety constraint wins. If proven
 
 | Consumer / system action | Expected result |
 |---|---|
-| App passes `operation_ref` | Module resolves output budget, reasoning mode, candidate budget, structured-output mode, retry policy, override rules, and failover reserve |
+| App passes `operation_ref` | Module resolves output budget, reasoning mode, candidate budget, structured-output mode, retry policy, override rules, and last-candidate protection |
 | Caller provides allowed override | Effective runtime config records caller value and provenance |
 | Caller override conflicts with hard cap | Hard cap wins; provenance records requested value and clamp/rejection |
 | Policy `max_tokens` exceeds candidate hard cap | Validation fails with `llm.policy.output_budget_exceeds_hard_cap` |
@@ -469,7 +469,7 @@ invoke(
 | Operation deadline expires | Module returns `llm.deadline.exceeded`; no later response can become success |
 | Candidate exceeds allocated budget | Candidate is classified as `llm.invocation.local_candidate_timeout`; fallback may proceed if retryable and deadline remains |
 | Provider response arrives after local timeout | Late response is discarded as success; telemetry may record redacted late-response diagnostic |
-| Async API and sync API differ mechanically | Difference is documented; failure codes, telemetry, and cancellation semantics remain equivalent |
+| Host wraps the sync API from async code | Wrapping boundary is host-owned; module failure codes, telemetry, cancellation, and deadline semantics remain those of the sync V1 API |
 
 ### 7. Pool Router, Suppression, And Rollout Controls
 
@@ -604,7 +604,7 @@ Forbidden telemetry content:
 | Config schema validity | Offline | Yes | Machine-readable pass/fail with path-specific errors |
 | Endpoint registry consistency | Offline | Yes | UIDs, roles, provider formats, model families, credential refs, and config identity validate |
 | Capability compatibility | Offline | Yes | Role pool x operation policy x candidate capability profiles are compatible |
-| Runtime policy validity | Offline | Yes | Output budget, reasoning mode, candidate budget, failover reserve, override rules validate |
+| Runtime policy validity | Offline | Yes | Output budget, reasoning mode, candidate budget, last-candidate protection, override rules validate |
 | Structured-output transform smoke | Offline | Yes | Tool-call/schema/prompt-JSON transformations validate without provider calls |
 | Plain-text operation smoke | Offline | Yes | Plain-text operations validate without fake schemas |
 | Candidate budget allocator simulation | Offline | Yes | Example deadlines prove candidates can be allocated or fail with typed reason |
@@ -777,7 +777,7 @@ Every typed failure includes, when applicable:
 | What is the canonical extraction/distribution path: independent repo, monorepo package, private package registry, or pinned subtree during transition? | Module maintainer + consuming repo owners | Determines release, dependency, and migration mechanics |
 | What is the minimum V1 provider-format set required by all current consumers? | Consuming repo owners | Defines initial adapter and capability-profile scope |
 | Should runtime config reload be excluded from V1 or included because a current consumer already needs it? | Module maintainer + app owners | Determines lifecycle scope |
-| What exact sync/async API shape should represent cancellation: returned typed failure, raised exception, or both by API style? | Module maintainer | Affects direct API |
+| When should the module add a native async API beyond the sync-only V1 contract? | Module maintainer | Requires a future design that preserves cancellation without compatibility shims |
 | Which token usage fields are available from the V1 providers and what safe cost attribution fields are allowed? | Operators + security reviewer | Enables quota visibility without cost-aware routing |
 | What schema fingerprint format should hosts use for schema contract identity? | Module maintainer + host app owners | Needed for smoke, telemetry, and debug artifacts |
 | Which fields, if any, may hosts opt into capturing for deeper debugging under stricter access controls? | Security/compliance + operators | Balances incident debugging with privacy/redaction guarantees |
@@ -789,7 +789,7 @@ The downstream technical design should make these V1 decisions explicit:
 1. Public package shape and import boundaries.
 2. Layered V1 delivery boundaries: Core, Migration Hardening, and Operator Add-Ons.
 3. Config schema versioning, precedence, provenance, and migration mechanics.
-4. Direct invocation API types, sync/async behavior, and cancellation semantics.
+4. Direct invocation API types, sync-only behavior, host-owned async wrapping boundary, and cancellation semantics.
 5. Operation runtime policy schema and validation algorithm.
 6. Capability profile schema, evidence requirements, and conservative unknown-family behavior.
 7. Provider adapter interface and failure normalization contract.
