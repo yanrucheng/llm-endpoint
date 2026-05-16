@@ -26,7 +26,6 @@ class SurfaceKind(StrEnum):
     HOST_CALLBACK = "host_callback"
     PROVIDER_ADAPTER = "provider_adapter"
     FIXTURE_SCHEMA = "fixture_schema"
-    MIGRATION_ADAPTER = "migration_adapter"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,14 +113,6 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         ),
         positive_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_covers_required_areas",
         negative_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_has_positive_and_negative_coverage",
-    ),
-    PublicSurface(
-        name="llm_endpoint.migration",
-        kind=SurfaceKind.MIGRATION_ADAPTER,
-        owner="migration-owner",
-        version_rule="Reserved Phase 5A surface; no legacy facade is exported in Phase 1.",
-        positive_fixture=None,
-        negative_fixture=None,
     ),
 )
 

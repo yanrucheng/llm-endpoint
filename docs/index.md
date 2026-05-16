@@ -14,4 +14,6 @@ superseded-by: ""
 
 | Folder | Type | Purpose |
 |---|---|---|
+| [design/](design/index.md) | design | Technical designs and architecture decisions. |
+| [plan/](plan/index.md) | plan | Development plans and implementation work breakdowns. |
 | [prd/](prd/index.md) | prd | Product requirements and product contracts. |

@@ -50,7 +50,7 @@ The defining boundary is:
 | Plain text output | Deadline, failure normalization, telemetry, redaction | Conversation semantics and response presentation |
 | Failover | Deterministic ordered pool routing and retry classification | Pool membership and priority order |
 | Observability | Event schema, redaction, attempt trace, request correlation | Log/metric/tracing sink and incident workflow |
-| Migration | Compatibility bridge contract and deprecation limits | Call-site inventory and rollout sequencing |
+| Migration | Direct-API extraction with no compatibility bridge | Call-site inventory and rollout sequencing |
 
 The core principle is:
 
@@ -71,9 +71,9 @@ The host owns product behavior.
 | G6 | Honor caller-bound operation deadlines, cancellation, and local candidate timeouts without late-response corruption | P0 |
 | G7 | Emit redacted, normalized telemetry with request correlation, attempt traces, token usage when available, and comparable failure classes across repos | P0 |
 | G8 | Support deterministic offline validation and fake-provider conformance tests so consumers can upgrade without real provider calls | P0 |
-| G9 | Provide a thin migration adapter for current Nightfall-needed ergonomics while keeping the direct invocation API canonical | P0 |
+| G9 | Migrate current Nightfall-needed ergonomics directly onto the canonical invocation API without preserving a compatibility facade | P0 |
 | G10 | Allow each repo to define its own roles, operations, schemas, policy values, endpoint pools, and rollout controls without forking module code | P0 |
-| G11 | Expose stable V1 public surfaces with clear compatibility, changelog, and deprecation rules | P0 |
+| G11 | Expose fixture-backed V1 public surfaces with explicit Zero BC rules before production release | P0 |
 | G12 | Expose role health/status and safe debug replay artifacts for operators without leaking prompts, responses, or secrets | P1 |
 
 ## V1 Scope
@@ -107,8 +107,8 @@ V1 Migration Hardening is required to migrate Nightfall and the first consumer r
 | Deadline failover | Deterministic ordered pools, retryable-only fallback, candidate budget allocator, hard local timeout, late-response discard |
 | Async/cancellation | Documented sync/async behavior, caller cancellation semantics, deadline expiry semantics, no fallback after caller cancellation |
 | Fake providers | Deterministic harness for rate limit, quota exhaustion, timeout, transient network, provider 5xx, refusal, malformed JSON, wrong tool, duplicate terminal tool, schema violation, late response, cancellation, and pool exhaustion |
-| Migration adapter | Thin bridge for current Nightfall-style role model handles and structured invocation while direct API becomes canonical |
-| Contract tests | Consumer-facing fixtures for config validation, failure taxonomy, telemetry redaction, structured output, pool simulation, and facade parity where facade is shipped |
+| Migration extraction | Direct call-site migration from Nightfall-style role model handles to canonical invocation; no compatibility facade |
+| Contract tests | Consumer-facing fixtures for config validation, failure taxonomy, telemetry redaction, structured output, and pool simulation |
 
 ### V1 Operator Add-Ons
 
@@ -131,7 +131,7 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 | Cost-aware routing | Basic token/cost telemetry is V1; routing by cost is not |
 | Provider incident registry | Manual/TTL endpoint suppression is enough for V1 |
 | Policy recommendation tooling | Probe evidence can be recorded, but policy choice remains host-owned config |
-| Broad facade support | Ship only the facade needed by current migration; direct API remains canonical |
+| Broad facade support | Zero BC excludes migration facades; direct API is the only invocation API |
 | Full CLI as a product surface | Library validation APIs are sufficient unless CI requires CLI output immediately |
 | Runtime config hot reload | Startup validation and config identity are V1; reload is only V1 if already required by a consumer |
 | Live smoke as mandatory CI | Live smoke is opt-in; offline smoke is mandatory |
@@ -250,26 +250,26 @@ V1 Operator Add-Ons are production-operability requirements. They should not blo
 
 | Attribute | Policy |
 |---|---|
-| Production API status | Established for documented public surfaces because multiple repos consume the module |
-| Versioning | Semantic versioning for public API, config schema, telemetry schema, failure taxonomy, validation APIs, and shipped facade behavior |
-| Breaking changes | Require a major version, migration notes, changelog entry, and a deprecation window of at least one minor release where feasible |
-| Config schema | Uses `config_version`; loaders support current major and previous major for at least one minor cycle unless security requires immediate rejection |
-| Telemetry schema | Minor versions may add optional fields; renames/removals require major version |
-| Error codes | Minor versions may add codes; removing or changing meaning requires major version |
-| Provider format identifiers | Stable within a major version; renames require aliases during deprecation |
-| Capability profiles | Additive changes are minor; changing semantics of an existing capability is major unless correcting an unsafe false-positive claim |
-| Facade APIs | Direct API is canonical; any shipped facade must preserve behavior or document limitations |
-| Migration adapter | Temporary, documented, and deprecation-bound; not a permanent legacy API |
+| Production API status | Not established for the standalone package; current repo-local call sites are outside this package boundary |
+| Versioning | Current public surfaces carry explicit schema/taxonomy versions for fixture identity, not BC coexistence |
+| Breaking changes | Allowed before production release; no deprecation window, aliases, dual APIs, or compatibility shims |
+| Config schema | Uses `config_schema_version`; loaders accept only the current clean-slate schema |
+| Telemetry schema | Current event schema is fixture-backed; pre-production renames/removals may replace it directly |
+| Error codes | Current codes are fixture-backed; pre-production removals or meaning changes may replace them directly |
+| Provider format identifiers | Current identifiers are fixture-backed; pre-production renames do not require aliases |
+| Capability profiles | Capability semantics may be corrected or replaced directly before production release |
+| Facade APIs | No facade APIs are shipped; direct invocation is the only public invocation contract |
+| Migration adapter | Prohibited as BC debt; migration is call-site change plus version-pin rollback |
 | Internal layout | Free to change without notice if public behavior remains stable |
 
 Requirements:
 
-1. Every consuming repo must depend on a published module version or pinned commit with a migration plan; local forks are not an intended extension path.
+1. Every consuming repo must depend on a published module version or pinned commit with a direct-API migration plan; local forks are not an intended extension path.
 2. Every behavior-affecting release must include a changelog entry naming affected public surfaces.
-3. Every breaking release must include migration notes and a compatibility risk summary.
+3. Every breaking release before production must label the changed public surfaces and required consumer edits.
 4. Unknown construction keys, unsupported runtime knobs, and unknown config fields must fail closed unless an extension point explicitly allows them.
-5. Security-driven tightening may occur in a minor release only when the previous behavior was unsafe; the changelog must label it as a compatibility exception.
-6. Nightfall-local migration may use zero backward compatibility for old internal env-var/provider tuple paths, but the standalone module's documented public surfaces follow this policy.
+5. Security-driven tightening may replace unsafe behavior immediately; the changelog must label it as a safety correction.
+6. Nightfall-local migration uses zero backward compatibility for old internal env-var/provider tuple paths and does not create standalone module BC obligations.
 
 ## Public Surface Contract
 
@@ -288,24 +288,24 @@ The module's V1 public surface includes only the following categories:
 | Secret resolver interface | Minimal host callback contract and redacted credential-failure behavior |
 | Schema resolver interface | Host callback or registration contract for schema material, validator, version, and fingerprint |
 | Provider adapter extension API | Minimum contract for adding provider formats and model families |
-| Migration adapter | Thin, documented bridge for current Nightfall-needed ergonomics |
+| Migration extraction docs/tests | Direct-API migration steps and fixtures for current Nightfall-needed call-site changes |
 
 Everything else is internal unless explicitly documented as public.
 
-## Migration Adapter Contract
+## Migration Extraction Contract
 
-The Nightfall migration adapter exists to reduce migration risk, not to create a second permanent API. V1 preserves only the minimum ergonomics needed to move current call sites onto the standalone module while direct invocation remains canonical.
+Nightfall migration reduces risk through explicit call-site changes, fixture coverage, and version-pin rollback. V1 does not preserve legacy ergonomics through a module compatibility facade.
 
-| Adapter surface | V1 stance |
+| Legacy surface | V1 stance |
 |---|---|
-| Role-based model lookup | May preserve a `get_model_by_role`-style bridge if it resolves through the standalone registry |
-| Pool-aware chat model handle | May preserve a thin handle for LangChain-style call sites if every invocation still binds role, operation, deadline, and policy |
-| Structured invoke helper | May preserve helper ergonomics if schema contract identity and validation still go through the module |
-| LangGraph compatibility | Allowed only through the thin handle/helper required by existing Nightfall call sites |
+| Role-based model lookup | Replace with canonical role + operation invocation |
+| Pool-aware chat model handle | Replace with registry-backed endpoint pools and explicit operation policy |
+| Structured invoke helper | Replace with schema contract refs and canonical structured invocation |
+| LangGraph compatibility | Host-owned integration around the direct API; not a module facade |
 | Raw provider tuple construction | Not preserved; callers must not construct provider/model/base-url/credential tuples |
 | Old env-var factory semantics | Config-source compatibility only; not a public invocation API |
 
-The adapter must emit deprecation telemetry or diagnostics where practical and must be removable without changing the direct invocation contract.
+Migration proof is consumer fixture parity against direct API outcomes, not facade behavior preservation.
 
 ## Host Application Responsibilities
 
@@ -403,7 +403,7 @@ If two behavior sources conflict, the stricter safety constraint wins. If proven
 
 | Case | Expected behavior |
 |---|---|
-| App invokes without `operation_ref` | Allowed only through explicit migration compatibility mode; production mode fails with `llm.policy.operation_ref_required` |
+| App invokes without `operation_ref` | Validation fails with `llm.policy.operation_ref_required`; no migration compatibility mode exists |
 | Operation policy is unused by any role | Validation warns unless strict-unused mode is enabled |
 | Policy references unknown model family | Validation fails unless conservative unknown-family behavior is explicitly selected |
 | Host retunes policy values | No code change is required; validation and telemetry expose the new policy fingerprint |
@@ -610,7 +610,7 @@ Forbidden telemetry content:
 | Candidate budget allocator simulation | Offline | Yes | Example deadlines prove candidates can be allocated or fail with typed reason |
 | Telemetry redaction smoke | Offline | Yes | Events and failure payloads prove forbidden fields are absent |
 | Fake-provider conformance | Offline | Yes | Deterministic failure/success scenarios produce expected result, failure, telemetry, and attempt trace |
-| Facade parity | Offline | Conditional | Required only for shipped facades such as Nightfall migration adapter |
+| Direct-API parity | Offline | Yes | Consumer fixtures prove migrated call sites match expected direct API outcomes |
 | Live invocation smoke | Online opt-in | Conditional | Uses production-equivalent registry path and returns redacted result |
 
 Offline gates must run without network access and without real credential values.
@@ -640,7 +640,7 @@ It must not include raw prompts, raw responses, secrets, unredacted tool args, o
 2. Consumer feature code does not construct provider SDK clients for module-owned calls.
 3. Offline validation runs in CI without network access or real credentials.
 4. Validation rejects unknown roles, unknown UIDs, unsupported provider formats, unsupported runtime knobs, capability mismatches, invalid schema-output modes, missing required schema contracts, output budgets above hard caps, unsupported reasoning modes, and unallocatable candidate budgets before live calls.
-5. Every production invocation uses an operation runtime policy or an explicit migration compatibility mode that is visible and deprecation-bound.
+5. Every invocation uses an operation runtime policy; no migration compatibility mode exists.
 6. Plain-text operations are supported without forcing fake structured schemas.
 7. Structured-output operations return validated typed values or typed failures; raw provider payloads are never success values.
 8. The pool router never exceeds the caller-bound operation deadline and never silently retries non-retryable failures.
@@ -652,8 +652,8 @@ It must not include raw prompts, raw responses, secrets, unredacted tool args, o
 14. Fake-provider conformance tests cover retryable failures, non-retryable failures, invalid structured output, cancellation, late response, and pool exhaustion.
 15. Endpoint suppression is represented as a routing skip reason and role-health state; operations can still succeed through eligible fallback candidates.
 16. Schema contract resolution has one primary V1 path with stable schema version/fingerprint behavior.
-17. The Nightfall migration adapter preserves only the required current ergonomics while direct invocation remains canonical.
-18. V1 public surfaces are documented and versioned; breaking changes require changelog and migration notes.
+17. Nightfall call sites migrate directly to canonical invocation without a module compatibility facade.
+18. V1 public surfaces are documented, versioned for fixture identity, and governed by Zero BC before production release.
 19. Nightfall-specific examples remain examples only; removing them does not break the module core.
 
 ## Output & Errors
@@ -729,8 +729,8 @@ Every typed failure includes, when applicable:
 | Decision | Rationale |
 |---|---|
 | V1 is a minimal durable spine | Feedback warned that the full platform target would slow migration and freeze mistakes too early |
-| Direct invocation contract is canonical | Facades can vary, but behavior must remain stable across frameworks |
-| A thin Nightfall migration adapter is V1 | Removing existing ergonomics too early creates migration risk without improving the core contract |
+| Direct invocation contract is canonical | Framework integrations are host-owned wrappers around the direct API |
+| No Nightfall compatibility facade is V1 | Preserving old ergonomics creates BC debt before the clean module boundary is proven |
 | Operation refs are first-class | Runtime budgets cannot be safely tuned without a stable operation binding |
 | Plain text mode is first-class | Not every LLM call should be forced through a structured schema |
 | Capability profiles describe hard facts, not preferences | Prevents runtime policies from confusing provider limits with desired behavior |
@@ -748,16 +748,16 @@ Every typed failure includes, when applicable:
 
 | Metric | Target / Signal |
 |---|---|
-| Consumer adoption | Current consumers invoke through direct API or documented migration adapter, not provider tuples |
+| Consumer adoption | Current consumers invoke through direct API, not provider tuples or migration facades |
 | Config validation | CI can validate every consumer config offline |
 | Provider leakage | No application feature code imports provider SDKs for module-owned calls |
 | Failure normalization | All module invocation failures map to documented typed codes |
 | Telemetry comparability | Cross-repo queries can group by shared event names, invocation IDs, endpoint UIDs, operation refs, and failure classes |
-| Runtime policy coverage | Production operations have explicit operation runtime policies or documented migration compatibility |
+| Runtime policy coverage | Operations have explicit operation runtime policies |
 | Plain-text support | Conversational operations use module deadlines/failures/telemetry without fake schemas |
 | Fake-provider coverage | Required failure and late-response scenarios are covered by deterministic fixtures |
 | Redaction | Smoke and tests prove forbidden fields are absent from telemetry, errors, and debug artifacts |
-| Upgrade discipline | Releases include changelog and migration notes for public-surface changes |
+| Upgrade discipline | Releases identify public-surface changes and required direct consumer edits |
 
 ## Related Documents
 
@@ -768,7 +768,7 @@ Every typed failure includes, when applicable:
 - [design-260516-0400-agentic-runtime-budget-contract](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/docs/design/design-260516-0400-agentic-runtime-budget-contract.md) - runtime budget contract design generalized here as operation runtime policy.
 - [260516-1236 standalone feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1236-standalone-llm-endpoint-feedback/report.md) - review feedback requiring strict V1 cut, fake providers, request correlation, secret resolver, and role health.
 - [260516-1245 module feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1245-llm-endpoint-module-feedback/report.md) - review feedback requiring migration bridge, conformance tests, config precedence, rollout controls, circuit breaker, cost/token guardrails, async/cancellation, streaming boundary, and debug replay artifacts.
-- [260516-1301 V1 feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1301-llm-endpoint-v1-feedback/report.md) - review feedback requiring layered V1 scope, cleaner precedence, schema resolver boundary, suppression-as-routing-reason, deterministic role health, and narrower migration adapter shape.
+- [260516-1301 V1 feedback](file:///Users/chengyanru/repos/venture/lg/nightfall-ai/eval/sessions/260516-1301-llm-endpoint-v1-feedback/report.md) - review feedback requiring layered V1 scope, cleaner precedence, schema resolver boundary, suppression-as-routing-reason, deterministic role health, and later-superseded migration-facade analysis.
 
 ## Open Questions
 
@@ -776,9 +776,8 @@ Every typed failure includes, when applicable:
 |---|---|---|
 | What is the canonical extraction/distribution path: independent repo, monorepo package, private package registry, or pinned subtree during transition? | Module maintainer + consuming repo owners | Determines release, dependency, and migration mechanics |
 | What is the minimum V1 provider-format set required by all current consumers? | Consuming repo owners | Defines initial adapter and capability-profile scope |
-| Which one runtime facade is required for Nightfall migration, if any? | Module maintainer + Nightfall owner | Prevents broad facade support from bloating V1 |
 | Should runtime config reload be excluded from V1 or included because a current consumer already needs it? | Module maintainer + app owners | Determines lifecycle scope |
-| What exact sync/async API shape should represent cancellation: returned typed failure, raised exception, or both by API style? | Module maintainer | Affects direct API and facade parity |
+| What exact sync/async API shape should represent cancellation: returned typed failure, raised exception, or both by API style? | Module maintainer | Affects direct API |
 | Which token usage fields are available from the V1 providers and what safe cost attribution fields are allowed? | Operators + security reviewer | Enables quota visibility without cost-aware routing |
 | What schema fingerprint format should hosts use for schema contract identity? | Module maintainer + host app owners | Needed for smoke, telemetry, and debug artifacts |
 | Which fields, if any, may hosts opt into capturing for deeper debugging under stricter access controls? | Security/compliance + operators | Balances incident debugging with privacy/redaction guarantees |
@@ -804,15 +803,16 @@ The downstream technical design should make these V1 decisions explicit:
 15. Fake provider harness and conformance fixture format.
 16. Offline smoke API output format and optional live-smoke behavior.
 17. Debug replay artifact schema and redaction proof.
-18. Nightfall migration adapter boundaries and deprecation plan.
-19. Compatibility checker for public API/config/telemetry/failure taxonomy changes.
+18. Nightfall direct-API migration inventory and rollback plan.
+19. Zero BC checker for public API/config/telemetry/failure taxonomy changes.
 20. Extraction plan from Nightfall-local package to standalone module.
 
 ## Revision Log
 
 | Date | Change |
 |---|---|
-| 2026-05-16 | Incorporated additional V1 feedback from `260516-1301`: split V1 into Core, Migration Hardening, and Operator Add-Ons; cleaned config precedence; defined schema resolver expectations; clarified endpoint suppression as a routing skip reason; added deterministic role-health semantics; narrowed the migration adapter contract; and added `llm.pool.no_eligible_candidate`. |
-| 2026-05-16 | Incorporated feedback from the two module review sessions: converted the document from broad target contract to pragmatic V1 product contract, removed speculative extension section, added strict V1 scope, explicit non-V1 scope, migration adapter, fake providers, contract tests, config precedence, rollout controls, endpoint suppression, cost/token telemetry, async/cancellation, streaming boundary, role health, and debug replay artifacts. |
+| 2026-05-16 | Applied Zero BC policy: removed migration adapter as a V1 product surface, made direct API migration mandatory, and prohibited compatibility shims before production release. |
+| 2026-05-16 | Incorporated additional V1 feedback from `260516-1301`: split V1 into Core, Migration Hardening, and Operator Add-Ons; cleaned config precedence; defined schema resolver expectations; clarified endpoint suppression as a routing skip reason; added deterministic role-health semantics; analyzed a migration facade later removed by Zero BC; and added `llm.pool.no_eligible_candidate`. |
+| 2026-05-16 | Incorporated feedback from the two module review sessions: converted the document from broad target contract to pragmatic V1 product contract, removed speculative extension section, added strict V1 scope, explicit non-V1 scope, fake providers, contract tests, config precedence, rollout controls, endpoint suppression, cost/token telemetry, async/cancellation, streaming boundary, role health, and debug replay artifacts. |
 | 2026-05-16 | Strengthened the draft into a standalone cross-repo product contract: added product definition, host responsibilities, public surface contract, installation/version behavior, lifecycle behavior, extension behavior, security/redaction requirements, success metrics, and technical-design handoff notes. |
 | 2026-05-16 | Initial draft. Reframed the LLM endpoint code as a cross-repo reusable product module, codified operation runtime policy as the central reusable abstraction, and separated module machinery from consumer vocabulary, prompts, schemas, and evidence. |

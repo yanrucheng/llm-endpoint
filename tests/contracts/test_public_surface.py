@@ -34,6 +34,11 @@ def test_manifest_uses_zero_bc() -> None:
     assert "no legacy loaders" in config_surfaces[0].version_rule
 
 
+def test_every_public_surface_has_fixture_coverage() -> None:
+    assert all(surface.positive_fixture for surface in PUBLIC_SURFACES)
+    assert all(surface.negative_fixture for surface in PUBLIC_SURFACES)
+
+
 def test_phase_1_d_to_g_surfaces_have_fixtures() -> None:
     names = {
         "llm_endpoint.telemetry",
