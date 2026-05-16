@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import cast
 
 from llm_endpoint.adapters import (
     AdapterInvocationPlan,
@@ -13,8 +12,13 @@ from llm_endpoint.adapters import (
     ProviderOutcome,
     execute_provider_attempt,
 )
-from llm_endpoint.callbacks import SecretResolver
-from llm_endpoint.config import ProviderFormat, Registry, RetryClass
+from llm_endpoint.callbacks import (
+    SchemaContract,
+    SchemaResolutionStatus,
+    SchemaResolver,
+    SecretResolver,
+)
+from llm_endpoint.config import ProviderFormat, Registry, RetryClass, StructuredOutputMode
 from llm_endpoint.invocation import InvocationPlan
 from llm_endpoint.normalization import normalize_provider_outcome
 from llm_endpoint.results import (
@@ -25,6 +29,7 @@ from llm_endpoint.results import (
     TypedFailure,
     failure,
 )
+from llm_endpoint.structured import StructuredOutputContext, normalize_structured_provider_outcome
 from llm_endpoint.telemetry import (
     TelemetryEmitter,
     TelemetryEvent,
@@ -79,12 +84,18 @@ def route_invocation(
     registry: Registry,
     adapters: Mapping[ProviderFormat | str, ProviderAdapter],
     secret_resolver: SecretResolver | None = None,
+    schema_resolver: SchemaResolver | None = None,
     suppressed_endpoint_reasons: Mapping[str, str] | None = None,
     telemetry_emitter: TelemetryEmitter | None = None,
 ) -> PoolRouteResult:
     """Execute an invocation plan through an ordered endpoint pool."""
 
     emitter = telemetry_emitter or TelemetryEmitter()
+    schema_or_failure = _resolve_schema(plan, schema_resolver)
+    if isinstance(schema_or_failure, TypedFailure):
+        emitter.emit(_failure_event(schema_or_failure))
+        return _route_result(schema_or_failure, [], emitter)
+
     suppressed = suppressed_endpoint_reasons or {}
     traces: list[AttemptTrace] = []
     attempted = 0
@@ -166,7 +177,12 @@ def route_invocation(
             adapter=adapter,
             secret_resolver=secret_resolver,
         )
-        attempt_terminal: TerminalResult = _terminal_result(plan, attempt_output, attempt_trace_id)
+        attempt_terminal: TerminalResult = _terminal_result(
+            plan,
+            attempt_output,
+            attempt_trace_id,
+            schema_or_failure,
+        )
         elapsed_ms = _elapsed_ms(attempt_output, attempt_terminal)
         elapsed_total_ms += elapsed_ms
         trace = _attempt_trace(
@@ -179,8 +195,8 @@ def route_invocation(
         traces.append(trace)
         emitter.emit(_attempt_event(plan, trace, attempt_output))
 
-        if not isinstance(attempt_terminal, TypedFailure):
-            success_terminal = cast(PlainTextResult | StructuredResult, attempt_terminal)
+        if isinstance(attempt_terminal, (PlainTextResult, StructuredResult)):
+            success_terminal = attempt_terminal
             emitter.emit(_success_event(plan, success_terminal, attempt_output))
             return _route_result(success_terminal, traces, emitter)
 
@@ -193,7 +209,7 @@ def route_invocation(
         emitter.emit(_failure_event(attempt_terminal))
         return _route_result(attempt_terminal, traces, emitter)
 
-    terminal = _pool_exhausted(plan, traces, last_retryable_failure)
+    terminal: TypedFailure = _pool_exhausted(plan, traces, last_retryable_failure)
     emitter.emit(
         telemetry_event(
             family=TelemetryEventFamily.POOL_EXHAUSTED,
@@ -234,10 +250,38 @@ def _terminal_result(
     plan: InvocationPlan,
     attempt_output: ProviderOutcome | TypedFailure,
     attempt_trace_id: str,
+    schema: SchemaContract | None,
 ) -> TerminalResult:
     if isinstance(attempt_output, TypedFailure):
         return attempt_output
-    plain_text_allowed = plan.effective_config.structured_output_mode.value == "none"
+    if plan.effective_config.structured_output_mode is not StructuredOutputMode.NONE:
+        if schema is None:
+            return failure(
+                code=FailureCode.SCHEMA_NOT_FOUND,
+                message=(
+                    "structured-output invocation requires resolved schema before normalization"
+                ),
+                operation_invocation_id=plan.operation_invocation_id,
+                role=plan.role,
+                operation_ref=plan.operation_ref,
+                policy_fingerprint=plan.policy_fingerprint,
+                attempt_trace_id=attempt_trace_id,
+            )
+        return normalize_structured_provider_outcome(
+            attempt_output,
+            context=StructuredOutputContext(
+                operation_invocation_id=plan.operation_invocation_id,
+                role=plan.role,
+                operation_ref=plan.operation_ref,
+                endpoint_uid=attempt_output.endpoint_uid,
+                policy_fingerprint=plan.policy_fingerprint,
+                elapsed_ms=attempt_output.elapsed_ms,
+                attempt_trace_id=attempt_trace_id,
+                schema=schema,
+                mode=plan.effective_config.structured_output_mode,
+            ),
+        )
+
     return normalize_provider_outcome(
         attempt_output,
         operation_invocation_id=plan.operation_invocation_id,
@@ -245,8 +289,79 @@ def _terminal_result(
         operation_ref=plan.operation_ref,
         policy_fingerprint=plan.policy_fingerprint,
         attempt_trace_id=attempt_trace_id,
-        plain_text_allowed=plain_text_allowed,
+        plain_text_allowed=True,
     )
+
+
+def _resolve_schema(
+    plan: InvocationPlan,
+    schema_resolver: SchemaResolver | None,
+) -> SchemaContract | None | TypedFailure:
+    if plan.effective_config.structured_output_mode is StructuredOutputMode.NONE:
+        return None
+    if not plan.schema_contract_ref:
+        return failure(
+            code=FailureCode.SCHEMA_NOT_FOUND,
+            message="structured-output invocation requires a schema_contract_ref",
+            operation_invocation_id=plan.operation_invocation_id,
+            role=plan.role,
+            operation_ref=plan.operation_ref,
+            policy_fingerprint=plan.policy_fingerprint,
+        )
+    if schema_resolver is None:
+        return failure(
+            code=FailureCode.SCHEMA_NOT_FOUND,
+            message="schema resolver is required for structured-output invocation",
+            operation_invocation_id=plan.operation_invocation_id,
+            role=plan.role,
+            operation_ref=plan.operation_ref,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={"schema_ref": plan.schema_contract_ref},
+        )
+    try:
+        resolution = schema_resolver(plan.schema_contract_ref)
+    except Exception as exc:  # pragma: no cover - callback implementation is host-owned.
+        return failure(
+            code=FailureCode.SCHEMA_NOT_FOUND,
+            message="schema resolver raised during schema resolution",
+            operation_invocation_id=plan.operation_invocation_id,
+            role=plan.role,
+            operation_ref=plan.operation_ref,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={
+                "schema_ref": plan.schema_contract_ref,
+                "resolver_exception": exc.__class__.__name__,
+            },
+        )
+    if resolution.ref != plan.schema_contract_ref:
+        return failure(
+            code=FailureCode.SCHEMA_NOT_FOUND,
+            message="schema resolver returned a mismatched ref",
+            operation_invocation_id=plan.operation_invocation_id,
+            role=plan.role,
+            operation_ref=plan.operation_ref,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={
+                "expected_schema_ref": plan.schema_contract_ref,
+                "actual_schema_ref": resolution.ref,
+            },
+        )
+    if resolution.status is not SchemaResolutionStatus.RESOLVED:
+        return resolution.to_failure(
+            operation_invocation_id=plan.operation_invocation_id,
+            operation_ref=plan.operation_ref,
+        )
+    if resolution.schema is None:
+        return failure(
+            code=FailureCode.SCHEMA_NOT_FOUND,
+            message="schema resolver returned resolved status without a schema",
+            operation_invocation_id=plan.operation_invocation_id,
+            role=plan.role,
+            operation_ref=plan.operation_ref,
+            policy_fingerprint=plan.policy_fingerprint,
+            safe_context={"schema_ref": plan.schema_contract_ref},
+        )
+    return resolution.schema
 
 
 def _is_failover_retryable(
@@ -389,6 +504,15 @@ def _success_event(
     token_usage = (
         attempt_output.token_usage if isinstance(attempt_output, ProviderOutcome) else None
     )
+    attributes = {"router_version": ROUTER_VERSION}
+    if isinstance(terminal, StructuredResult):
+        attributes.update(
+            {
+                "schema_name": terminal.schema_name,
+                "schema_version": terminal.schema_version,
+                "schema_fingerprint": terminal.schema_fingerprint,
+            }
+        )
     return telemetry_event(
         family=TelemetryEventFamily.SUCCESS,
         operation_invocation_id=plan.operation_invocation_id,
@@ -398,7 +522,7 @@ def _success_event(
         policy_fingerprint=plan.policy_fingerprint,
         elapsed_ms=terminal.elapsed_ms,
         token_usage=token_usage,
-        attributes={"router_version": ROUTER_VERSION},
+        attributes=attributes,
     )
 
 

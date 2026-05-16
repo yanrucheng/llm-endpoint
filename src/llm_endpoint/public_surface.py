@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase1"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase3"
 
 
 class CompatibilityLevel(StrEnum):
@@ -28,6 +28,7 @@ class SurfaceKind(StrEnum):
     HOST_CALLBACK = "host_callback"
     PROVIDER_ADAPTER = "provider_adapter"
     ROUTER = "router"
+    STRUCTURED_OUTPUT = "structured_output"
     FIXTURE_SCHEMA = "fixture_schema"
 
 
@@ -109,6 +110,22 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         ),
         negative_fixture=(
             "tests/contracts/test_results_contract.py::test_structured_payload_requires_pipeline"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.structured",
+        kind=SurfaceKind.STRUCTURED_OUTPUT,
+        owner="schema-owner",
+        version_rule=(
+            "Structured-output pipeline v1 is clean-slate; no legacy parser fallbacks."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_structured_output_contract.py::"
+            "test_json_schema_structured_output_validates_and_emits_schema_identity"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_structured_output_contract.py::"
+            "test_schema_validation_failure_is_typed_and_non_retryable"
         ),
     ),
     PublicSurface(

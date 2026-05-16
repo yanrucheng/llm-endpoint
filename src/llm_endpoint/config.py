@@ -71,6 +71,7 @@ class ConfigErrorCode(StrEnum):
     UNSUPPORTED_PROVIDER_FORMAT = "unsupported_provider_format"
     UNSUPPORTED_MODEL_FAMILY = "unsupported_model_family"
     INVALID_STRUCTURED_OUTPUT = "invalid_structured_output"
+    CONFIG_IDENTITY_NOT_FOUND = "config_identity_not_found"
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +212,98 @@ class Registry:
         if operation is None:
             raise KeyError(f"unknown operation: {operation_ref}")
         return self.policies_by_ref[operation.policy_ref]
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigActivationResult:
+    """Outcome of explicit active-registry lifecycle operations."""
+
+    ok: bool
+    active_config_identity: str | None
+    attempted_config_identity: str | None
+    validation_report: ConfigValidationReport
+    registry: Registry | None = None
+
+
+@dataclass(slots=True)
+class RegistryLifecycle:
+    """Explicit active registry lifecycle with full replacement validation."""
+
+    capability_catalog: Any | None = None
+    active_registry: Registry | None = None
+    registry_history: dict[str, Registry] = field(default_factory=dict)
+
+    @property
+    def active_config_identity(self) -> str | None:
+        """Expose the currently active config identity, if activation succeeded."""
+
+        if self.active_registry is None:
+            return None
+        return self.active_registry.config_identity
+
+    def activate(self, config: LLMEndpointConfig) -> ConfigActivationResult:
+        """Validate and activate the first or replacement registry atomically."""
+
+        return self.replace_active(config)
+
+    def replace_active(self, config: LLMEndpointConfig) -> ConfigActivationResult:
+        """Fully validate replacement config before changing active registry."""
+
+        attempted_identity = config_identity(config)
+        report = validate_config(config, capability_catalog=self.capability_catalog)
+        if not report.ok:
+            return ConfigActivationResult(
+                ok=False,
+                active_config_identity=self.active_config_identity,
+                attempted_config_identity=attempted_identity,
+                validation_report=report,
+            )
+
+        registry = build_registry(config, capability_catalog=self.capability_catalog)
+        self.active_registry = registry
+        self.registry_history[registry.config_identity] = registry
+        return ConfigActivationResult(
+            ok=True,
+            active_config_identity=registry.config_identity,
+            attempted_config_identity=attempted_identity,
+            validation_report=report,
+            registry=registry,
+        )
+
+    def rollback_to_identity(self, identity: str) -> ConfigActivationResult:
+        """Reactivate a previously validated registry by exact config identity."""
+
+        registry = self.registry_history.get(identity)
+        if registry is None:
+            return ConfigActivationResult(
+                ok=False,
+                active_config_identity=self.active_config_identity,
+                attempted_config_identity=identity,
+                validation_report=ConfigValidationReport(
+                    ok=False,
+                    config_identity=None,
+                    errors=(
+                        _error(
+                            ConfigErrorCode.CONFIG_IDENTITY_NOT_FOUND,
+                            "config_identity",
+                            f"unknown validated config identity: {identity}",
+                        ),
+                    ),
+                ),
+            )
+
+        self.active_registry = registry
+        return ConfigActivationResult(
+            ok=True,
+            active_config_identity=registry.config_identity,
+            attempted_config_identity=identity,
+            validation_report=ConfigValidationReport(
+                ok=True,
+                config_identity=registry.config_identity,
+                errors=(),
+            ),
+            registry=registry,
+        )
 
 
 def config_identity(config: LLMEndpointConfig) -> str:

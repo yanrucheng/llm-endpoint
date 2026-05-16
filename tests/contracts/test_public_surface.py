@@ -21,6 +21,7 @@ def test_manifest_surfaces_are_owned() -> None:
     assert "llm_endpoint.results" in names
     assert "llm_endpoint.results.FailureCode" in names
     assert "llm_endpoint.normalization" in names
+    assert "llm_endpoint.structured" in names
     assert "llm_endpoint.telemetry" in names
     assert "llm_endpoint.smoke" in names
     assert "llm_endpoint.callbacks" in names

@@ -38,6 +38,7 @@ from llm_endpoint.capabilities import (
 )
 from llm_endpoint.config import (
     CONFIG_SCHEMA_VERSION,
+    ConfigActivationResult,
     ConfigValidationReport,
     EndpointConfig,
     EndpointPool,
@@ -47,6 +48,7 @@ from llm_endpoint.config import (
     ProviderFormat,
     ReasoningMode,
     Registry,
+    RegistryLifecycle,
     ResolvedRole,
     RetryPolicy,
     RoleConfig,
@@ -113,6 +115,11 @@ from llm_endpoint.smoke import (
     SmokeCheckName,
     run_offline_smoke,
 )
+from llm_endpoint.structured import (
+    STRUCTURED_OUTPUT_PIPELINE_VERSION,
+    StructuredOutputContext,
+    normalize_structured_provider_outcome,
+)
 from llm_endpoint.telemetry import (
     TELEMETRY_SCHEMA_VERSION,
     RedactionStatus,
@@ -144,6 +151,7 @@ __all__ = [
     "ROUTER_VERSION",
     "SCHEMA_RESOLVER_CONTRACT_VERSION",
     "SECRET_RESOLVER_CONTRACT_VERSION",
+    "STRUCTURED_OUTPUT_PIPELINE_VERSION",
     "TELEMETRY_SCHEMA_VERSION",
     "AdapterInvocationPlan",
     "AttemptStatus",
@@ -154,6 +162,7 @@ __all__ = [
     "CapabilityFlag",
     "CapabilityHardLimits",
     "CapabilityProfile",
+    "ConfigActivationResult",
     "ConfigValidationReport",
     "ContractFixture",
     "EndpointConfig",
@@ -183,6 +192,7 @@ __all__ = [
     "RedactionStatus",
     "ReasoningMode",
     "Registry",
+    "RegistryLifecycle",
     "RetryPolicy",
     "Retryability",
     "ResolvedRole",
@@ -200,6 +210,7 @@ __all__ = [
     "SmokeCheckName",
     "StructuredResult",
     "StructuredOutputMode",
+    "StructuredOutputContext",
     "TelemetryContext",
     "TelemetryEmitter",
     "TelemetryEvent",
@@ -219,6 +230,7 @@ __all__ = [
     "is_retryable_provider_outcome",
     "missing_secret",
     "normalize_provider_outcome",
+    "normalize_structured_provider_outcome",
     "policy_fingerprint",
     "provider_failure",
     "provider_success",
