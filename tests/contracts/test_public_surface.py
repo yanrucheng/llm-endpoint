@@ -15,6 +15,8 @@ def test_manifest_surfaces_are_owned() -> None:
 
     assert "llm_endpoint.public_surface" in names
     assert "llm_endpoint.config" in names
+    assert "llm_endpoint.capabilities" in names
+    assert "llm_endpoint.policy" in names
     assert "llm_endpoint.results" in names
     assert "llm_endpoint.results.FailureCode" in names
     assert "llm_endpoint.telemetry" in names

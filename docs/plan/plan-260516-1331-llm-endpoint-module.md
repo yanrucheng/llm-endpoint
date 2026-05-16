@@ -93,6 +93,16 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 
 **Failure blocker:** Execution components remain blocked if registry, capability, policy, failure, and telemetry contracts are not integrated through the public invocation facade.
 
+**Partial result:** P2A-P2C completed on 2026-05-16. Phase 2 gate remains open until P2D-P2G are complete.
+
+| Check | Evidence |
+|---|---|
+| P2A registry/config validator | `llm_endpoint.config.build_registry`, `Registry.resolve_role`, and `Registry.resolve_operation_policy` validate and index config offline with deterministic `config_identity`. |
+| P2B capability catalog | `llm_endpoint.capabilities.DEFAULT_CAPABILITY_CATALOG` provides provider-format/model-family facts, evidence metadata, hard limits, and fail-closed unknown-family lookup. |
+| P2C runtime policy resolver | `llm_endpoint.policy.resolve_policy` resolves effective runtime config, provenance, policy fingerprint, override validation, hard-cap enforcement, and redacted `llm.policy.resolved` telemetry. |
+| Zero BC policy | New public surfaces are direct `v1` clean-slate contracts; no version routers, deprecated fields, compatibility adapters, or legacy precedence paths were added. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `28 passed`. |
+
 ## Phase 3: Execution Components
 
 | Track | Components / Contracts | Owner | Deliverables | Dev Units | Depends On |

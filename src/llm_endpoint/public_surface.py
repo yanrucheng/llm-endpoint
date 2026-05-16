@@ -23,6 +23,8 @@ class SurfaceKind(StrEnum):
     RESULT_CONTRACT = "result_contract"
     TELEMETRY_SCHEMA = "telemetry_schema"
     VALIDATION_API = "validation_api"
+    CAPABILITY_CATALOG = "capability_catalog"
+    POLICY_RESOLVER = "policy_resolver"
     HOST_CALLBACK = "host_callback"
     PROVIDER_ADAPTER = "provider_adapter"
     FIXTURE_SCHEMA = "fixture_schema"
@@ -57,6 +59,28 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         version_rule="Only config_schema_version == 'v1' is accepted; no legacy loaders.",
         positive_fixture="tests/contracts/test_config_contract.py::test_valid_config_contract",
         negative_fixture="tests/contracts/test_config_contract.py::test_invalid_config_contract",
+    ),
+    PublicSurface(
+        name="llm_endpoint.capabilities",
+        kind=SurfaceKind.CAPABILITY_CATALOG,
+        owner="adapter-owner",
+        version_rule=(
+            "Capability catalog v1 is clean-slate; unknown provider/model-family pairs fail closed."
+        ),
+        positive_fixture="tests/contracts/test_capabilities_contract.py::test_default_catalog_lookup",
+        negative_fixture=(
+            "tests/contracts/test_capabilities_contract.py::test_unknown_model_family_fails_closed"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.policy",
+        kind=SurfaceKind.POLICY_RESOLVER,
+        owner="runtime-owner",
+        version_rule=(
+            "Runtime policy resolver v1 replaces pre-V1 contracts directly; no legacy precedence."
+        ),
+        positive_fixture="tests/contracts/test_policy_contract.py::test_policy_resolution_contract",
+        negative_fixture="tests/contracts/test_policy_contract.py::test_policy_hard_cap_violation",
     ),
     PublicSurface(
         name="llm_endpoint.results",

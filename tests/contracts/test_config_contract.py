@@ -8,6 +8,8 @@ from llm_endpoint.config import (
     ProviderFormat,
     RoleConfig,
     StructuredOutputMode,
+    build_registry,
+    resolve_role,
     validate_config,
 )
 
@@ -96,3 +98,103 @@ def test_invalid_config_contract() -> None:
     assert ConfigErrorCode.UNKNOWN_ENDPOINT_REF in codes
     assert ConfigErrorCode.UNKNOWN_POLICY_REF in codes
     assert ConfigErrorCode.INVALID_STRUCTURED_OUTPUT in codes
+
+
+def test_registry_resolves_role_and_policy() -> None:
+    config = LLMEndpointConfig(
+        endpoints=(
+            EndpointConfig(
+                uid="primary",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-primary",
+            ),
+        ),
+        roles=(RoleConfig(name="writer", endpoint_uid="primary"),),
+        operations=(OperationConfig(ref="draft", policy_ref="draft-policy"),),
+        policies=(
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=1_000,
+                max_output_tokens=128,
+            ),
+        ),
+    )
+
+    registry = build_registry(config)
+    resolved = resolve_role(config, "writer")
+
+    assert registry.config_identity == resolved.config_identity
+    assert resolved.endpoint_uids == ("primary",)
+    assert registry.resolve_operation_policy("draft").ref == "draft-policy"
+
+
+def test_unknown_model_family_fails_config_validation() -> None:
+    config = LLMEndpointConfig(
+        endpoints=(
+            EndpointConfig(
+                uid="primary",
+                provider_format=ProviderFormat.FAKE,
+                model_family="unknown-family",
+                model="fake-model",
+                credential_ref="secret://fake-primary",
+            ),
+        ),
+        roles=(RoleConfig(name="writer", endpoint_uid="primary"),),
+        operations=(OperationConfig(ref="draft", policy_ref="draft-policy"),),
+        policies=(
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=1_000,
+                max_output_tokens=128,
+            ),
+        ),
+    )
+
+    report = validate_config(config)
+
+    assert report.ok is False
+    assert {error.code for error in report.errors} == {ConfigErrorCode.UNSUPPORTED_MODEL_FAMILY}
+
+
+def test_duplicate_registry_refs_fail_validation() -> None:
+    config = LLMEndpointConfig(
+        endpoints=(
+            EndpointConfig(
+                uid="primary",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-primary",
+            ),
+        ),
+        roles=(
+            RoleConfig(name="writer", endpoint_uid="primary"),
+            RoleConfig(name="writer", endpoint_uid="primary"),
+        ),
+        operations=(
+            OperationConfig(ref="draft", policy_ref="draft-policy"),
+            OperationConfig(ref="draft", policy_ref="draft-policy"),
+        ),
+        policies=(
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=1_000,
+                max_output_tokens=128,
+            ),
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=1_000,
+                max_output_tokens=128,
+            ),
+        ),
+    )
+
+    report = validate_config(config)
+    codes = {error.code for error in report.errors}
+
+    assert report.ok is False
+    assert ConfigErrorCode.DUPLICATE_ROLE in codes
+    assert ConfigErrorCode.DUPLICATE_OPERATION_REF in codes
+    assert ConfigErrorCode.DUPLICATE_POLICY_REF in codes

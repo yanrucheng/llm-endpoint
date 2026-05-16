@@ -53,11 +53,14 @@ class ConfigErrorCode(StrEnum):
     EMPTY_UID = "empty_uid"
     DUPLICATE_UID = "duplicate_uid"
     EMPTY_ROLE = "empty_role"
+    DUPLICATE_ROLE = "duplicate_role"
     UNKNOWN_ENDPOINT_REF = "unknown_endpoint_ref"
     EMPTY_POOL = "empty_pool"
     DUPLICATE_POOL_MEMBER = "duplicate_pool_member"
     UNKNOWN_POLICY_REF = "unknown_policy_ref"
+    DUPLICATE_POLICY_REF = "duplicate_policy_ref"
     EMPTY_OPERATION_REF = "empty_operation_ref"
+    DUPLICATE_OPERATION_REF = "duplicate_operation_ref"
     INVALID_DEADLINE = "invalid_deadline"
     INVALID_OUTPUT_BUDGET = "invalid_output_budget"
     INVALID_CANDIDATE_BUDGET = "invalid_candidate_budget"
@@ -65,6 +68,8 @@ class ConfigErrorCode(StrEnum):
     INVALID_SCHEMA_REF = "invalid_schema_ref"
     INVALID_CREDENTIAL_REF = "invalid_credential_ref"
     INVALID_CAPABILITY_REF = "invalid_capability_ref"
+    UNSUPPORTED_PROVIDER_FORMAT = "unsupported_provider_format"
+    UNSUPPORTED_MODEL_FAMILY = "unsupported_model_family"
     INVALID_STRUCTURED_OUTPUT = "invalid_structured_output"
 
 
@@ -161,6 +166,53 @@ class ConfigValidationReport:
     errors: tuple[ConfigValidationError, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedRole:
+    """Deterministic role resolution without provider calls."""
+
+    name: str
+    endpoint_uids: tuple[str, ...]
+    config_identity: str
+
+
+@dataclass(frozen=True, slots=True)
+class Registry:
+    """Validated offline registry indexes used by planning components."""
+
+    config: LLMEndpointConfig
+    config_identity: str
+    endpoints_by_uid: dict[str, EndpointConfig]
+    roles_by_name: dict[str, RoleConfig]
+    operations_by_ref: dict[str, OperationConfig]
+    policies_by_ref: dict[str, OperationRuntimePolicy]
+
+    def resolve_role(self, role_name: str) -> ResolvedRole:
+        """Resolve a role into one endpoint or an ordered candidate pool."""
+
+        role = self.roles_by_name.get(role_name)
+        if role is None:
+            raise KeyError(f"unknown role: {role_name}")
+        if role.endpoint_uid is not None:
+            endpoint_uids = (role.endpoint_uid,)
+        elif role.pool is not None:
+            endpoint_uids = role.pool.members
+        else:
+            raise ValueError(f"role has no endpoint resolution: {role_name}")
+        return ResolvedRole(
+            name=role.name,
+            endpoint_uids=endpoint_uids,
+            config_identity=self.config_identity,
+        )
+
+    def resolve_operation_policy(self, operation_ref: str) -> OperationRuntimePolicy:
+        """Resolve an operation into its configured runtime policy."""
+
+        operation = self.operations_by_ref.get(operation_ref)
+        if operation is None:
+            raise KeyError(f"unknown operation: {operation_ref}")
+        return self.policies_by_ref[operation.policy_ref]
+
+
 def config_identity(config: LLMEndpointConfig) -> str:
     """Return a deterministic identity for config material without secrets."""
 
@@ -168,10 +220,14 @@ def config_identity(config: LLMEndpointConfig) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
+def validate_config(
+    config: LLMEndpointConfig,
+    capability_catalog: Any | None = None,
+) -> ConfigValidationReport:
     """Validate config shape without network calls, credential values, or legacy loaders."""
 
     errors: list[ConfigValidationError] = []
+    catalog = _default_capability_catalog() if capability_catalog is None else capability_catalog
 
     if config.config_schema_version != CONFIG_SCHEMA_VERSION:
         errors.append(
@@ -183,6 +239,9 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
         )
 
     endpoint_uids: set[str] = set()
+    role_names: set[str] = set()
+    operation_refs: set[str] = set()
+    policy_refs: set[str] = set()
     if not config.endpoints:
         errors.append(
             _error(
@@ -194,6 +253,24 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
 
     for index, endpoint in enumerate(config.endpoints):
         path = f"endpoints[{index}]"
+        provider_format = _provider_format(endpoint.provider_format)
+        if provider_format is None:
+            errors.append(
+                _error(
+                    ConfigErrorCode.UNSUPPORTED_PROVIDER_FORMAT,
+                    f"{path}.provider_format",
+                    f"unsupported provider format: {endpoint.provider_format}",
+                )
+            )
+        elif not catalog.get(provider_format, endpoint.model_family):
+            errors.append(
+                _error(
+                    ConfigErrorCode.UNSUPPORTED_MODEL_FAMILY,
+                    f"{path}.model_family",
+                    f"unsupported model family for {provider_format}: {endpoint.model_family}",
+                )
+            )
+
         if not endpoint.uid:
             errors.append(
                 _error(ConfigErrorCode.EMPTY_UID, f"{path}.uid", "endpoint uid is required")
@@ -229,6 +306,16 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
             errors.append(
                 _error(ConfigErrorCode.EMPTY_ROLE, f"{path}.name", "role name is required")
             )
+        elif role.name in role_names:
+            errors.append(
+                _error(
+                    ConfigErrorCode.DUPLICATE_ROLE,
+                    f"{path}.name",
+                    "role name must be unique",
+                )
+            )
+        else:
+            role_names.add(role.name)
 
         if (role.endpoint_uid is None) == (role.pool is None):
             errors.append(
@@ -252,8 +339,17 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
         if role.pool is not None:
             _validate_pool(role.pool, endpoint_uids, path, errors)
 
-    policy_refs = {policy.ref for policy in config.policies if policy.ref}
     for index, policy in enumerate(config.policies):
+        if policy.ref in policy_refs:
+            errors.append(
+                _error(
+                    ConfigErrorCode.DUPLICATE_POLICY_REF,
+                    f"policies[{index}].ref",
+                    "policy ref must be unique",
+                )
+            )
+        elif policy.ref:
+            policy_refs.add(policy.ref)
         _validate_policy(policy, f"policies[{index}]", errors)
 
     for index, operation in enumerate(config.operations):
@@ -266,6 +362,16 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
                     "operation ref is required",
                 )
             )
+        elif operation.ref in operation_refs:
+            errors.append(
+                _error(
+                    ConfigErrorCode.DUPLICATE_OPERATION_REF,
+                    f"{path}.ref",
+                    "operation ref must be unique",
+                )
+            )
+        else:
+            operation_refs.add(operation.ref)
         if operation.policy_ref not in policy_refs:
             errors.append(
                 _error(
@@ -286,6 +392,29 @@ def validate_config(config: LLMEndpointConfig) -> ConfigValidationReport:
     if errors:
         return ConfigValidationReport(ok=False, config_identity=None, errors=tuple(errors))
     return ConfigValidationReport(ok=True, config_identity=config_identity(config), errors=())
+
+
+def build_registry(config: LLMEndpointConfig, capability_catalog: Any | None = None) -> Registry:
+    """Build validated registry indexes for offline planning."""
+
+    report = validate_config(config, capability_catalog=capability_catalog)
+    if not report.ok or report.config_identity is None:
+        codes = ", ".join(error.code.value for error in report.errors)
+        raise ValueError(f"invalid config cannot build registry: {codes}")
+    return Registry(
+        config=config,
+        config_identity=report.config_identity,
+        endpoints_by_uid={endpoint.uid: endpoint for endpoint in config.endpoints},
+        roles_by_name={role.name: role for role in config.roles},
+        operations_by_ref={operation.ref: operation for operation in config.operations},
+        policies_by_ref={policy.ref: policy for policy in config.policies},
+    )
+
+
+def resolve_role(config: LLMEndpointConfig, role_name: str) -> ResolvedRole:
+    """Validate config and resolve a role to ordered endpoint UIDs."""
+
+    return build_registry(config).resolve_role(role_name)
 
 
 def _validate_pool(
@@ -383,6 +512,21 @@ def _validate_policy(
 
 def _error(code: ConfigErrorCode, path: str, message: str) -> ConfigValidationError:
     return ConfigValidationError(code=code, path=path, message=message)
+
+
+def _provider_format(value: Any) -> ProviderFormat | None:
+    if isinstance(value, ProviderFormat):
+        return value
+    try:
+        return ProviderFormat(value)
+    except ValueError:
+        return None
+
+
+def _default_capability_catalog() -> Any:
+    from llm_endpoint.capabilities import DEFAULT_CAPABILITY_CATALOG
+
+    return DEFAULT_CAPABILITY_CATALOG
 
 
 def _canonical_json(value: Any) -> str:
