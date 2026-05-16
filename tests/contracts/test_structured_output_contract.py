@@ -50,6 +50,9 @@ def test_json_schema_structured_output_validates_and_emits_schema_identity() -> 
     assert result.terminal_result.schema_name == "answer"
     success_event = result.telemetry[-1]
     assert success_event.family is TelemetryEventFamily.SUCCESS
+    assert success_event.context.schema_contract_ref == "schema://answer/v1"
+    assert success_event.context.schema_fingerprint == "sha256:answer"
+    assert success_event.context.schema_resolution_status == "resolved"
     assert success_event.attributes["schema_fingerprint"] == "sha256:answer"
     assert success_event.attributes["structured_output_pipeline_version"] == "v1"
     assert success_event.attributes["structured_output_mode"] == "json_schema"
@@ -81,7 +84,13 @@ def test_schema_validation_failure_is_typed_and_non_retryable() -> None:
     assert isinstance(result.terminal_result, TypedFailure)
     assert result.terminal_result.code is FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD
     assert result.terminal_result.is_retryable is False
+    assert result.terminal_result.context.schema_contract_ref == "schema://answer/v1"
+    assert result.terminal_result.context.schema_fingerprint == "sha256:answer"
     assert result.terminal_result.diagnostics.safe_context["validation_stage"] == "host_validator"
+    failure_event = result.telemetry[-1]
+    assert failure_event.family is TelemetryEventFamily.FAILURE
+    assert failure_event.context.schema_contract_ref == "schema://answer/v1"
+    assert failure_event.context.schema_fingerprint == "sha256:answer"
 
 
 def test_json_schema_validation_runs_before_host_validator() -> None:
@@ -175,6 +184,11 @@ def test_missing_schema_resolution_blocks_provider_attempts() -> None:
 
     assert isinstance(result.terminal_result, TypedFailure)
     assert result.terminal_result.code is FailureCode.UNKNOWN_SCHEMA_CONTRACT
+    assert result.terminal_result.context.schema_contract_ref == "schema://answer/v1"
+    assert result.terminal_result.context.schema_resolution_status == "not_found"
+    failure_event = result.telemetry[-1]
+    assert failure_event.context.schema_contract_ref == "schema://answer/v1"
+    assert failure_event.context.schema_resolution_status == "not_found"
     assert result.attempt_traces == ()
     assert adapter.calls_by_endpoint == {}
 

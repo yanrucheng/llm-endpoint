@@ -88,6 +88,9 @@ def test_failure_contract_is_safe() -> None:
         role="writer",
         operation_ref="draft",
         endpoint_uid="endpoint-a",
+        schema_contract_ref="schema://answer/v1",
+        schema_fingerprint="sha256:answer",
+        schema_resolution_status="resolved",
         policy_fingerprint="policy-1",
         elapsed_ms=1_000,
         attempt_trace_id="trace-1",
@@ -96,6 +99,9 @@ def test_failure_contract_is_safe() -> None:
 
     assert typed_failure.is_retryable is True
     assert typed_failure.context.attempt_trace is not None
+    assert typed_failure.context.schema_contract_ref == "schema://answer/v1"
+    assert typed_failure.context.schema_fingerprint == "sha256:answer"
+    assert typed_failure.context.schema_resolution_status == "resolved"
     assert typed_failure.diagnostics.safe_context == {"provider_status": "timeout"}
 
 

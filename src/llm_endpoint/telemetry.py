@@ -79,6 +79,9 @@ class TelemetryContext:
     operation_ref: str | None = None
     endpoint_uid: str | None = None
     attempt_trace_id: str | None = None
+    schema_contract_ref: str | None = None
+    schema_fingerprint: str | None = None
+    schema_resolution_status: str | None = None
     policy_fingerprint: str | None = None
     elapsed_ms: int | None = None
     failure_class: FailureClass | None = None
@@ -163,6 +166,9 @@ def telemetry_event(
     operation_ref: str | None = None,
     endpoint_uid: str | None = None,
     attempt_trace_id: str | None = None,
+    schema_contract_ref: str | None = None,
+    schema_fingerprint: str | None = None,
+    schema_resolution_status: str | None = None,
     policy_fingerprint: str | None = None,
     elapsed_ms: int | None = None,
     failure_class: FailureClass | None = None,
@@ -180,6 +186,9 @@ def telemetry_event(
             operation_ref=operation_ref,
             endpoint_uid=endpoint_uid,
             attempt_trace_id=attempt_trace_id,
+            schema_contract_ref=schema_contract_ref,
+            schema_fingerprint=schema_fingerprint,
+            schema_resolution_status=schema_resolution_status,
             policy_fingerprint=policy_fingerprint,
             elapsed_ms=elapsed_ms,
             failure_class=failure_class,

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
+from typing import overload
 
 from llm_endpoint.adapters import (
     AdapterInvocationPlan,
@@ -110,7 +111,11 @@ def route_invocation(
 
     for candidate_index, endpoint_uid in enumerate(plan.endpoint_uids):
         if _is_cancelled(plan):
-            terminal = _cancelled_failure(plan, elapsed_total_ms=elapsed_total_ms)
+            terminal = _cancelled_failure(
+                plan,
+                elapsed_total_ms=elapsed_total_ms,
+                schema=schema_or_failure,
+            )
             emitter.emit(_cancellation_event(terminal))
             emitter.emit(_failure_event(terminal))
             return _route_result(terminal, traces, emitter)
@@ -134,6 +139,10 @@ def route_invocation(
                 role=plan.role,
                 operation_ref=plan.operation_ref,
                 endpoint_uid=endpoint_uid,
+                schema_contract_ref=plan.schema_contract_ref,
+                schema_fingerprint=(
+                    schema_or_failure.fingerprint if schema_or_failure is not None else None
+                ),
                 policy_fingerprint=plan.policy_fingerprint,
                 elapsed_ms=elapsed_total_ms,
             )
@@ -170,6 +179,10 @@ def route_invocation(
                 role=plan.role,
                 operation_ref=plan.operation_ref,
                 endpoint_uid=endpoint_uid,
+                schema_contract_ref=plan.schema_contract_ref,
+                schema_fingerprint=(
+                    schema_or_failure.fingerprint if schema_or_failure is not None else None
+                ),
                 policy_fingerprint=plan.policy_fingerprint,
             )
             traces.append(
@@ -205,6 +218,7 @@ def route_invocation(
                 endpoint_uid=endpoint_uid,
                 elapsed_total_ms=elapsed_total_ms,
                 attempt_trace_id=attempt_trace_id,
+                schema=schema_or_failure,
             )
             trace = _attempt_trace(
                 trace_id=attempt_trace_id,
@@ -227,6 +241,7 @@ def route_invocation(
                 elapsed_total_ms=elapsed_total_ms,
                 attempt_trace_id=attempt_trace_id,
                 candidate_budget_ms=candidate_budget_ms,
+                schema=schema_or_failure,
             )
             trace = _attempt_trace(
                 trace_id=attempt_trace_id,
@@ -265,13 +280,21 @@ def route_invocation(
         emitter.emit(_failure_event(attempt_terminal))
         return _route_result(attempt_terminal, traces, emitter)
 
-    terminal: TypedFailure = _pool_exhausted(plan, traces, last_retryable_failure)
+    terminal: TypedFailure = _pool_exhausted(
+        plan,
+        traces,
+        last_retryable_failure,
+        schema=schema_or_failure,
+    )
     emitter.emit(
         telemetry_event(
             family=TelemetryEventFamily.POOL_EXHAUSTED,
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=terminal.context.schema_contract_ref,
+            schema_fingerprint=terminal.context.schema_fingerprint,
+            schema_resolution_status=terminal.context.schema_resolution_status,
             policy_fingerprint=plan.policy_fingerprint,
             failure_class=terminal.failure_class,
             attributes={
@@ -309,7 +332,8 @@ def _terminal_result(
     schema: SchemaContract | None,
 ) -> TerminalResult:
     if isinstance(attempt_output, TypedFailure):
-        return attempt_output
+        return _with_schema_identity(attempt_output, schema)
+    assert isinstance(attempt_output, ProviderOutcome)
     if plan.effective_config.structured_output_mode is not StructuredOutputMode.NONE:
         if schema is None:
             return failure(
@@ -320,6 +344,7 @@ def _terminal_result(
                 operation_invocation_id=plan.operation_invocation_id,
                 role=plan.role,
                 operation_ref=plan.operation_ref,
+                schema_contract_ref=plan.schema_contract_ref,
                 policy_fingerprint=plan.policy_fingerprint,
                 attempt_trace_id=attempt_trace_id,
             )
@@ -338,7 +363,7 @@ def _terminal_result(
             ),
         )
 
-    return normalize_provider_outcome(
+    terminal = normalize_provider_outcome(
         attempt_output,
         operation_invocation_id=plan.operation_invocation_id,
         role=plan.role,
@@ -347,6 +372,7 @@ def _terminal_result(
         attempt_trace_id=attempt_trace_id,
         plain_text_allowed=True,
     )
+    return _with_schema_identity(terminal, schema)
 
 
 def _resolve_schema(
@@ -362,6 +388,7 @@ def _resolve_schema(
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=plan.schema_contract_ref,
             policy_fingerprint=plan.policy_fingerprint,
         )
     if schema_resolver is None:
@@ -371,6 +398,8 @@ def _resolve_schema(
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=plan.schema_contract_ref,
+            schema_resolution_status=SchemaResolutionStatus.NOT_FOUND.value,
             policy_fingerprint=plan.policy_fingerprint,
             safe_context={"schema_ref": plan.schema_contract_ref},
         )
@@ -383,6 +412,8 @@ def _resolve_schema(
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=plan.schema_contract_ref,
+            schema_resolution_status=SchemaResolutionStatus.FAILED.value,
             policy_fingerprint=plan.policy_fingerprint,
             safe_context={
                 "schema_ref": plan.schema_contract_ref,
@@ -396,6 +427,11 @@ def _resolve_schema(
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=plan.schema_contract_ref,
+            schema_fingerprint=(
+                resolution.schema.fingerprint if resolution.schema is not None else None
+            ),
+            schema_resolution_status=resolution.status.value,
             policy_fingerprint=plan.policy_fingerprint,
             safe_context={
                 "expected_schema_ref": plan.schema_contract_ref,
@@ -414,6 +450,8 @@ def _resolve_schema(
             operation_invocation_id=plan.operation_invocation_id,
             role=plan.role,
             operation_ref=plan.operation_ref,
+            schema_contract_ref=plan.schema_contract_ref,
+            schema_resolution_status=SchemaResolutionStatus.RESOLVED.value,
             policy_fingerprint=plan.policy_fingerprint,
             safe_context={"schema_ref": plan.schema_contract_ref},
         )
@@ -453,6 +491,7 @@ def _cancelled_failure(
     elapsed_total_ms: int,
     endpoint_uid: str | None = None,
     attempt_trace_id: str | None = None,
+    schema: SchemaContract | None = None,
 ) -> TypedFailure:
     return failure(
         code=FailureCode.CANCELLED,
@@ -461,6 +500,8 @@ def _cancelled_failure(
         role=plan.role,
         operation_ref=plan.operation_ref,
         endpoint_uid=endpoint_uid,
+        schema_contract_ref=plan.schema_contract_ref,
+        schema_fingerprint=schema.fingerprint if schema is not None else None,
         policy_fingerprint=plan.policy_fingerprint,
         elapsed_ms=elapsed_total_ms,
         attempt_trace_id=attempt_trace_id,
@@ -474,6 +515,7 @@ def _late_response_failure(
     elapsed_total_ms: int,
     attempt_trace_id: str,
     candidate_budget_ms: int,
+    schema: SchemaContract | None = None,
 ) -> TypedFailure:
     return failure(
         code=FailureCode.LATE_RESPONSE_DISCARDED,
@@ -482,6 +524,8 @@ def _late_response_failure(
         role=plan.role,
         operation_ref=plan.operation_ref,
         endpoint_uid=endpoint_uid,
+        schema_contract_ref=plan.schema_contract_ref,
+        schema_fingerprint=schema.fingerprint if schema is not None else None,
         policy_fingerprint=plan.policy_fingerprint,
         elapsed_ms=elapsed_total_ms,
         attempt_trace_id=attempt_trace_id,
@@ -496,6 +540,8 @@ def _pool_exhausted(
     plan: InvocationPlan,
     traces: list[AttemptTrace],
     last_retryable_failure: TypedFailure | None,
+    *,
+    schema: SchemaContract | None,
 ) -> TypedFailure:
     context = {
         "attempt_count": str(_attempt_count(traces)),
@@ -509,6 +555,8 @@ def _pool_exhausted(
         operation_invocation_id=plan.operation_invocation_id,
         role=plan.role,
         operation_ref=plan.operation_ref,
+        schema_contract_ref=plan.schema_contract_ref,
+        schema_fingerprint=schema.fingerprint if schema is not None else None,
         policy_fingerprint=plan.policy_fingerprint,
         safe_context=context,
     )
@@ -622,6 +670,9 @@ def _cancellation_event(terminal: TypedFailure) -> TelemetryEvent:
         attempt_trace_id=(
             terminal.context.attempt_trace.trace_id if terminal.context.attempt_trace else None
         ),
+        schema_contract_ref=terminal.context.schema_contract_ref,
+        schema_fingerprint=terminal.context.schema_fingerprint,
+        schema_resolution_status=terminal.context.schema_resolution_status,
         policy_fingerprint=terminal.context.policy_fingerprint,
         elapsed_ms=terminal.context.elapsed_ms,
         failure_class=terminal.failure_class,
@@ -642,6 +693,9 @@ def _deadline_event(terminal: TypedFailure) -> TelemetryEvent:
         attempt_trace_id=(
             terminal.context.attempt_trace.trace_id if terminal.context.attempt_trace else None
         ),
+        schema_contract_ref=terminal.context.schema_contract_ref,
+        schema_fingerprint=terminal.context.schema_fingerprint,
+        schema_resolution_status=terminal.context.schema_resolution_status,
         policy_fingerprint=terminal.context.policy_fingerprint,
         elapsed_ms=terminal.context.elapsed_ms,
         failure_class=terminal.failure_class,
@@ -667,6 +721,7 @@ def _late_response_event(
         operation_ref=plan.operation_ref,
         endpoint_uid=trace.endpoint_uid,
         attempt_trace_id=trace.trace_id,
+        schema_contract_ref=plan.schema_contract_ref,
         policy_fingerprint=plan.policy_fingerprint,
         elapsed_ms=trace.elapsed_ms,
         attributes={
@@ -703,6 +758,17 @@ def _success_event(
         role=plan.role,
         operation_ref=plan.operation_ref,
         endpoint_uid=terminal.endpoint_uid,
+        schema_contract_ref=(
+            plan.schema_contract_ref if isinstance(terminal, StructuredResult) else None
+        ),
+        schema_fingerprint=(
+            terminal.schema_fingerprint if isinstance(terminal, StructuredResult) else None
+        ),
+        schema_resolution_status=(
+            SchemaResolutionStatus.RESOLVED.value
+            if isinstance(terminal, StructuredResult)
+            else None
+        ),
         policy_fingerprint=plan.policy_fingerprint,
         elapsed_ms=terminal.elapsed_ms,
         token_usage=token_usage,
@@ -720,6 +786,9 @@ def _failure_event(terminal: TypedFailure) -> TelemetryEvent:
         attempt_trace_id=(
             terminal.context.attempt_trace.trace_id if terminal.context.attempt_trace else None
         ),
+        schema_contract_ref=terminal.context.schema_contract_ref,
+        schema_fingerprint=terminal.context.schema_fingerprint,
+        schema_resolution_status=terminal.context.schema_resolution_status,
         policy_fingerprint=terminal.context.policy_fingerprint,
         elapsed_ms=terminal.context.elapsed_ms,
         failure_class=terminal.failure_class,
@@ -748,7 +817,41 @@ def _elapsed_ms(attempt_output: ProviderOutcome | TypedFailure, terminal: Termin
         return attempt_output.elapsed_ms
     if isinstance(terminal, TypedFailure):
         return terminal.context.elapsed_ms or 0
-    return terminal.elapsed_ms
+    if isinstance(terminal, (PlainTextResult, StructuredResult)):
+        return terminal.elapsed_ms
+    raise TypeError("unknown terminal result type")
+
+
+@overload
+def _with_schema_identity(
+    terminal: TypedFailure,
+    schema: SchemaContract | None,
+) -> TypedFailure: ...
+
+
+@overload
+def _with_schema_identity(
+    terminal: PlainTextResult | StructuredResult,
+    schema: SchemaContract | None,
+) -> PlainTextResult | StructuredResult: ...
+
+
+def _with_schema_identity(
+    terminal: TerminalResult,
+    schema: SchemaContract | None,
+) -> TerminalResult:
+    if not isinstance(terminal, TypedFailure) or schema is None:
+        return terminal
+    context = replace(
+        terminal.context,
+        schema_contract_ref=terminal.context.schema_contract_ref or schema.ref,
+        schema_fingerprint=terminal.context.schema_fingerprint or schema.fingerprint,
+        schema_resolution_status=(
+            terminal.context.schema_resolution_status
+            or SchemaResolutionStatus.RESOLVED.value
+        ),
+    )
+    return replace(terminal, context=context)
 
 
 def _attempt_count(traces: list[AttemptTrace]) -> int:

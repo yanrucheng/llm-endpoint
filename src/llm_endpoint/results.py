@@ -172,6 +172,9 @@ class FailureContext:
     role: str | None = None
     operation_ref: str | None = None
     endpoint_uid: str | None = None
+    schema_contract_ref: str | None = None
+    schema_fingerprint: str | None = None
+    schema_resolution_status: str | None = None
     policy_fingerprint: str | None = None
     elapsed_ms: int | None = None
     attempt_trace: AttemptTraceRef | None = None
@@ -249,6 +252,9 @@ def failure(
     role: str | None = None,
     operation_ref: str | None = None,
     endpoint_uid: str | None = None,
+    schema_contract_ref: str | None = None,
+    schema_fingerprint: str | None = None,
+    schema_resolution_status: str | None = None,
     policy_fingerprint: str | None = None,
     elapsed_ms: int | None = None,
     attempt_trace_id: str | None = None,
@@ -270,6 +276,9 @@ def failure(
             role=role,
             operation_ref=operation_ref,
             endpoint_uid=endpoint_uid,
+            schema_contract_ref=schema_contract_ref,
+            schema_fingerprint=schema_fingerprint,
+            schema_resolution_status=schema_resolution_status,
             policy_fingerprint=policy_fingerprint,
             elapsed_ms=elapsed_ms,
             attempt_trace=trace,

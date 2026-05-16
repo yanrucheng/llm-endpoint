@@ -142,6 +142,8 @@ class SchemaResolution:
             message=diagnostics.message,
             operation_invocation_id=operation_invocation_id,
             operation_ref=operation_ref,
+            schema_contract_ref=self.ref,
+            schema_resolution_status=self.status.value,
             remediation_hint=diagnostics.remediation_hint,
             safe_context={"schema_ref": self.ref, **dict(diagnostics.safe_context)},
         )

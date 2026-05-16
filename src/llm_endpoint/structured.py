@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
-from llm_endpoint.adapters import ProviderOutcome
+from llm_endpoint.adapters import ProviderOutcome, ProviderSuccessPayload
 from llm_endpoint.callbacks import SchemaContract
 from llm_endpoint.config import StructuredOutputMode
 from llm_endpoint.results import FailureCode, StructuredResult, TerminalResult, failure
@@ -44,6 +44,7 @@ def normalize_structured_provider_outcome(
             role=context.role,
             operation_ref=context.operation_ref,
             endpoint_uid=context.endpoint_uid,
+            **_schema_failure_identity(context.schema),
             policy_fingerprint=context.policy_fingerprint,
             elapsed_ms=context.elapsed_ms,
             attempt_trace_id=context.attempt_trace_id,
@@ -109,6 +110,7 @@ def _schema_validation_failure(
         role=context.role,
         operation_ref=context.operation_ref,
         endpoint_uid=context.endpoint_uid,
+        **_schema_failure_identity(context.schema),
         policy_fingerprint=context.policy_fingerprint,
         elapsed_ms=context.elapsed_ms,
         attempt_trace_id=context.attempt_trace_id,
@@ -185,8 +187,7 @@ def _extract_payload(
     outcome: ProviderOutcome,
     context: StructuredOutputContext,
 ) -> Mapping[str, Any] | TerminalResult:
-    payload = outcome.payload
-    if payload is None:
+    if outcome.payload is None:
         return failure(
             code=FailureCode.INVALID_STRUCTURED_OUTPUT_PAYLOAD,
             message="provider success outcome omitted structured payload",
@@ -194,11 +195,12 @@ def _extract_payload(
             role=context.role,
             operation_ref=context.operation_ref,
             endpoint_uid=context.endpoint_uid,
+            **_schema_failure_identity(context.schema),
             policy_fingerprint=context.policy_fingerprint,
             elapsed_ms=context.elapsed_ms,
             attempt_trace_id=context.attempt_trace_id,
         )
-    assert payload is not None
+    payload = cast(ProviderSuccessPayload, outcome.payload)
 
     content = payload.content
     if not isinstance(content, Mapping):
@@ -209,6 +211,7 @@ def _extract_payload(
             role=context.role,
             operation_ref=context.operation_ref,
             endpoint_uid=context.endpoint_uid,
+            **_schema_failure_identity(context.schema),
             policy_fingerprint=context.policy_fingerprint,
             elapsed_ms=context.elapsed_ms,
             attempt_trace_id=context.attempt_trace_id,
@@ -224,6 +227,7 @@ def _extract_payload(
                 role=context.role,
                 operation_ref=context.operation_ref,
                 endpoint_uid=context.endpoint_uid,
+                **_schema_failure_identity(context.schema),
                 policy_fingerprint=context.policy_fingerprint,
                 elapsed_ms=context.elapsed_ms,
                 attempt_trace_id=context.attempt_trace_id,
@@ -240,6 +244,7 @@ def _extract_payload(
             role=context.role,
             operation_ref=context.operation_ref,
             endpoint_uid=context.endpoint_uid,
+            **_schema_failure_identity(context.schema),
             policy_fingerprint=context.policy_fingerprint,
             elapsed_ms=context.elapsed_ms,
             attempt_trace_id=context.attempt_trace_id,
@@ -254,5 +259,12 @@ def _schema_context(schema: SchemaContract) -> Mapping[str, str]:
         "schema_ref": schema.ref,
         "schema_name": schema.name,
         "schema_version": schema.version,
+        "schema_fingerprint": schema.fingerprint,
+    }
+
+
+def _schema_failure_identity(schema: SchemaContract) -> dict[str, str]:
+    return {
+        "schema_contract_ref": schema.ref,
         "schema_fingerprint": schema.fingerprint,
     }
