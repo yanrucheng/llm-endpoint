@@ -18,7 +18,8 @@ storage, and environment-specific behavior owned by the consuming repository.
 | Python | `>=3.12` |
 | Runtime dependencies | None |
 | License | MIT |
-| Stability | Pre-V1 / clean-slate adoption |
+| Stability | Pre-V1 adoption candidate |
+| Distribution | GitHub/source pinning first; PyPI deferred |
 
 This project follows a Zero Backward Compatibility policy before V1. Consumers
 must pin exact versions and treat each upgrade as an explicit contract
@@ -66,13 +67,17 @@ artifacts, or logs. Use credential references such as `secret://prod/openai` or
 
 ## Installation
 
-For local cross-repo adoption while this package is pre-publish:
+This project is not positioned as a PyPI-first package yet. Use source-pinned
+adoption until at least one real consuming repository has passed offline smoke,
+optional live smoke, and the consumer contract pack.
+
+For active local development from a sibling checkout:
 
 ```bash
 uv add --editable /absolute/path/to/llm-endpoint
 ```
 
-For a committed path dependency from a sibling repository:
+For a private/local path dependency:
 
 ```toml
 [project]
@@ -81,14 +86,27 @@ dependencies = [
 ]
 ```
 
-For a published release:
+For cross-repo adoption from GitHub, pin an exact commit SHA:
 
-```bash
-uv add "llm-endpoint==0.1.0"
+```toml
+[project]
+dependencies = [
+  "llm-endpoint @ git+https://github.com/yanrucheng/llm-endpoint.git@<commit-sha>",
+]
 ```
 
-Always pin the exact version. Do not use floating version ranges for pre-V1
-adoption.
+After a verified adoption tag exists, consumers may pin that tag instead:
+
+```toml
+[project]
+dependencies = [
+  "llm-endpoint @ git+https://github.com/yanrucheng/llm-endpoint.git@v0.1.0-adoption.1",
+]
+```
+
+Do not depend on `main` directly. Do not use floating version ranges for pre-V1
+adoption. PyPI publication is deferred until the source-pinned adoption path is
+proven in a real external repository.
 
 ## Quick Start
 
@@ -382,7 +400,7 @@ structured output, pool simulation, plain text, and direct migration.
 
 Recommended rollout sequence for a consuming repository:
 
-1. Pin `llm-endpoint==0.1.0`.
+1. Pin an exact Git commit SHA or verified adoption tag.
 2. Build a host-owned config object from local or service-owned config.
 3. Run `run_offline_smoke()` for every role and operation.
 4. Run the consumer contract pack in the host repository.
@@ -394,8 +412,30 @@ Rollback is by current config identity and exact package pin:
 
 - Restore the last known-good config object.
 - Suppress a bad endpoint UID.
-- Re-pin to the previous exact package version.
+- Re-pin to the previous exact commit SHA or adoption tag.
 - Re-run offline smoke and consumer contract checks before resuming traffic.
+
+## Release Policy
+
+Current recommended distribution is GitHub/source pinning, not PyPI.
+
+Adoption tags should be created only after:
+
+- The full test suite passes.
+- Offline smoke passes for the target consuming repo config.
+- Optional live smoke passes or is explicitly recorded as skipped.
+- Consumer contract-pack checks are wired into the consuming repo.
+- README usage instructions match the real adoption flow.
+
+Suggested pre-V1 tag format:
+
+```text
+v0.1.0-adoption.1
+v0.1.0-adoption.2
+```
+
+PyPI publication should wait until at least one external repository completes
+source-pinned adoption without undocumented setup steps.
 
 ## Development
 
