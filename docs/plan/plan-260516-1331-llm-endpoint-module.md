@@ -148,6 +148,18 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 
 **Failure blocker:** Migration and broad consumer adoption cannot start if terminal outcomes, fake-provider scenarios, role health, or debug artifacts are not deterministic and redacted.
 
+**P4C-E status:** Passed on 2026-05-16. Fake-provider scenario fixtures, role-health evaluation, and redacted debug replay artifacts are covered by Phase 4 contract tests.
+
+| Check | Evidence |
+|---|---|
+| P4C fake-provider harness | `llm_endpoint.fake_provider.build_fake_provider_harness` and `FakeProviderScenario` cover rate limit, quota, timeout, transient network, 5xx, refusal, malformed JSON, wrong tool, duplicate terminal tool, schema violation, late response, cancellation, and pool exhaustion without live calls. |
+| P4C deterministic routing fixtures | `tests/contracts/test_phase4_invocation_hardening.py` proves pool exhaustion and structured-output wrong-tool failures through the public router using fake scenarios. |
+| P4D role health service | `llm_endpoint.role_health.evaluate_role_health` returns deterministic `available`, `degraded`, `fallback_only`, `missing_secret`, `failing_smoke`, `uncertified`, `suppressed`, and `unavailable` states with sorted redacted reasons and `llm.role.health` telemetry. |
+| P4E debug replay artifacts | `llm_endpoint.debug.build_debug_replay_artifact` captures redacted endpoint plan, policy provenance, capability profile, schema trace, attempt trace, typed failure, and fake-provider reproduction hook. |
+| Redaction guard | `DebugReplayArtifact` rejects forbidden raw provider fields before persistence. |
+| Zero BC policy | New P4C-E public surfaces are direct `v1` clean-slate contracts; no version routers, deprecated status mapping, compatibility facades, or legacy fixture layouts were added. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `69 passed`. |
+
 ## Phase 5: Operator Readiness & Adoption
 
 | Track | Components / Contracts | Owner | Deliverables | Dev Units | Depends On |
@@ -281,6 +293,7 @@ graph LR
 | Date | Change |
 |---|---|
 | 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning facade, offline smoke API shell, and contract coverage. |
+| 2026-05-16 | Passed Phase 4C-E by adding deterministic fake-provider scenarios, role-health service, redacted debug replay artifacts, and Zero BC public surface coverage. |
 | 2026-05-16 | Passed Phase 1 gate, added gate evidence, and aligned the plan to Zero BC with no migration facade. |
 | 2026-05-16 | Tightened the plan for true same-phase independence: corrected component count, split dependent execution work into five phases, added config lifecycle, Zero BC guard, revised metrics, and replaced the dependency graph. |
 | 2026-05-16 | Initial development plan derived from technical design. |

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase4ab"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase4cde"
 
 
 class CompatibilityLevel(StrEnum):
@@ -30,6 +30,9 @@ class SurfaceKind(StrEnum):
     ROUTER = "router"
     STRUCTURED_OUTPUT = "structured_output"
     FIXTURE_SCHEMA = "fixture_schema"
+    FAKE_PROVIDER_HARNESS = "fake_provider_harness"
+    ROLE_HEALTH = "role_health"
+    DEBUG_REPLAY = "debug_replay"
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +196,55 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         ),
         positive_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_covers_required_areas",
         negative_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_has_positive_and_negative_coverage",
+    ),
+    PublicSurface(
+        name="llm_endpoint.fake_provider",
+        kind=SurfaceKind.FAKE_PROVIDER_HARNESS,
+        owner="test-owner",
+        version_rule=(
+            "Fake-provider harness v1 is deterministic and clean-slate; no legacy fixture layouts."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4c_fake_provider_harness_covers_required_scenarios"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4c_fake_provider_harness_drives_pool_exhaustion"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.role_health",
+        kind=SurfaceKind.ROLE_HEALTH,
+        owner="operations-owner",
+        version_rule=(
+            "Role-health service v1 is direct operator API only; no legacy status mapping."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4d_role_health_reports_available_and_degraded_states"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4d_role_health_reports_unavailable_states"
+        ),
+    ),
+    PublicSurface(
+        name="llm_endpoint.debug",
+        kind=SurfaceKind.DEBUG_REPLAY,
+        owner="observability-owner",
+        version_rule=(
+            "Debug replay artifact v1 is redacted and replaceable before V1; "
+            "no raw payload capture."
+        ),
+        positive_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4e_debug_replay_artifact_is_redacted_and_reproducible"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_phase4_invocation_hardening.py::"
+            "test_phase_4e_debug_replay_rejects_forbidden_fields"
+        ),
     ),
 )
 
