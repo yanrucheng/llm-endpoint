@@ -67,9 +67,50 @@ def test_policy_hard_cap_violation() -> None:
     assert result.context.endpoint_uid == "primary"
 
 
+def test_policy_unknown_role_returns_specific_endpoint_code() -> None:
+    result = resolve_policy(
+        config=_config(),
+        role="ghost",
+        operation_ref="draft",
+        operation_invocation_id="inv-unknown-role",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.UNKNOWN_ROLE
+    assert result.code.value == "llm.endpoint.unknown_role"
+
+
+def test_policy_unknown_operation_returns_specific_endpoint_code() -> None:
+    result = resolve_policy(
+        config=_config(),
+        role="writer",
+        operation_ref="missing",
+        operation_invocation_id="inv-unknown-operation",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.UNKNOWN_ENTRYPOINT
+    assert result.code.value == "llm.endpoint.unknown_entrypoint"
+
+
+def test_policy_deadline_shape_returns_candidate_budget_code() -> None:
+    result = resolve_policy(
+        config=_config(deadline_ms=70_000),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-budget-shape",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE
+    assert result.code.value == "llm.policy.candidate_budget_unallocatable"
+    assert result.context.endpoint_uid == "primary"
+
+
 def _config(
     *,
     allow_overrides: bool = False,
+    deadline_ms: int = 10_000,
     max_output_tokens: int = 1_024,
 ) -> LLMEndpointConfig:
     return LLMEndpointConfig(
@@ -95,7 +136,7 @@ def _config(
         policies=(
             OperationRuntimePolicy(
                 ref="draft-policy",
-                deadline_ms=10_000,
+                deadline_ms=deadline_ms,
                 max_output_tokens=max_output_tokens,
                 reasoning_mode=ReasoningMode.MEDIUM,
                 candidate_budget_ms=4_000,

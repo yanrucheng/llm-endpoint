@@ -98,6 +98,19 @@ def test_phase_5b_force_candidate_requires_test_mode() -> None:
     assert result.code.value == "llm.endpoint.unsupported_runtime_knob"
 
 
+def test_phase_5b_disabled_pool_returns_no_eligible_candidate_code() -> None:
+    plan = _plan("inv-p5b-disabled")
+
+    result = apply_rollout_controls(
+        plan=plan,
+        controls=RolloutControls(disabled_endpoint_uids=frozenset({"primary", "fallback"})),
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.NO_ELIGIBLE_CANDIDATE
+    assert result.code.value == "llm.pool.no_eligible_candidate"
+
+
 def test_phase_5b_force_candidate_rewrites_plan_in_test_mode() -> None:
     plan = _plan("inv-p5b-test-force")
 

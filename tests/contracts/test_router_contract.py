@@ -1,5 +1,6 @@
 from llm_endpoint.adapters import (
     FakeProviderAdapter,
+    ProviderAdapter,
     ProviderOutcomeKind,
     provider_failure,
     provider_success,
@@ -52,7 +53,7 @@ def test_ordered_retryable_failover() -> None:
     result = route_invocation(
         plan=plan,
         registry=registry,
-        adapters={ProviderFormat.FAKE: adapter},
+        adapters=_adapter_map(adapter),
         secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
     )
 
@@ -89,7 +90,7 @@ def test_suppression_skip_preserves_last_eligible_candidate() -> None:
     result = route_invocation(
         plan=plan,
         registry=registry,
-        adapters={ProviderFormat.FAKE: adapter},
+        adapters=_adapter_map(adapter),
         secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
         suppressed_endpoint_reasons={
             "primary": "maintenance",
@@ -132,14 +133,32 @@ def test_non_retryable_failure_stops_pool() -> None:
     result = route_invocation(
         plan=plan,
         registry=registry,
-        adapters={ProviderFormat.FAKE: adapter},
+        adapters=_adapter_map(adapter),
         secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
     assert result.terminal_result.code is FailureCode.PROVIDER_FAILURE
+    assert result.terminal_result.code.value == "llm.invocation.provider_failure"
     assert [trace.endpoint_uid for trace in result.attempt_traces] == ["primary"]
     assert adapter.calls_by_endpoint == {"primary": 1}
+
+
+def test_missing_provider_adapter_returns_endpoint_code() -> None:
+    registry = build_registry(_config(max_attempts=1))
+    plan = _plan(registry)
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters={},
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+    )
+
+    assert isinstance(result.terminal_result, TypedFailure)
+    assert result.terminal_result.code is FailureCode.UNSUPPORTED_PROVIDER_FORMAT
+    assert result.terminal_result.code.value == "llm.endpoint.unsupported_provider_format"
+    assert result.terminal_result.context.endpoint_uid == "primary"
 
 
 def test_pool_exhaustion_is_typed_failure() -> None:
@@ -169,12 +188,13 @@ def test_pool_exhaustion_is_typed_failure() -> None:
     result = route_invocation(
         plan=plan,
         registry=registry,
-        adapters={ProviderFormat.FAKE: adapter},
+        adapters=_adapter_map(adapter),
         secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
     )
 
     assert isinstance(result.terminal_result, TypedFailure)
     assert result.terminal_result.code is FailureCode.POOL_EXHAUSTED
+    assert result.terminal_result.code.value == "llm.pool.exhausted"
     assert result.terminal_result.diagnostics.safe_context == {
         "attempt_count": "2",
         "skipped_count": "0",
@@ -200,6 +220,10 @@ def _plan(registry: Registry) -> InvocationPlan:
     )
     assert isinstance(result, InvocationPlan)
     return result
+
+
+def _adapter_map(adapter: ProviderAdapter) -> dict[ProviderFormat | str, ProviderAdapter]:
+    return {ProviderFormat.FAKE: adapter}
 
 
 def _config(max_attempts: int) -> LLMEndpointConfig:
