@@ -51,6 +51,8 @@ def test_json_schema_structured_output_validates_and_emits_schema_identity() -> 
     success_event = result.telemetry[-1]
     assert success_event.family is TelemetryEventFamily.SUCCESS
     assert success_event.attributes["schema_fingerprint"] == "sha256:answer"
+    assert success_event.attributes["structured_output_pipeline_version"] == "v1"
+    assert success_event.attributes["structured_output_mode"] == "json_schema"
 
 
 def test_schema_validation_failure_is_typed_and_non_retryable() -> None:
@@ -79,6 +81,70 @@ def test_schema_validation_failure_is_typed_and_non_retryable() -> None:
     assert isinstance(result.terminal_result, TypedFailure)
     assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
     assert result.terminal_result.is_retryable is False
+    assert result.terminal_result.diagnostics.safe_context["validation_stage"] == "host_validator"
+
+
+def test_json_schema_validation_runs_before_host_validator() -> None:
+    registry = build_registry(_config())
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_success(
+                    endpoint_uid="primary",
+                    elapsed_ms=24,
+                    content={"answer": 42},
+                ),
+            )
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters={ProviderFormat.FAKE: adapter},
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+        schema_resolver=_answer_schema,
+    )
+
+    assert isinstance(result.terminal_result, TypedFailure)
+    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.diagnostics.safe_context["validation_stage"] == "json_schema"
+
+
+def test_host_validator_exception_fails_closed() -> None:
+    registry = build_registry(_config())
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_success(
+                    endpoint_uid="primary",
+                    elapsed_ms=24,
+                    content={"answer": "ok"},
+                ),
+            )
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters={ProviderFormat.FAKE: adapter},
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+        schema_resolver=_raising_schema,
+    )
+
+    assert isinstance(result.terminal_result, TypedFailure)
+    assert result.terminal_result.code is FailureCode.SCHEMA_VALIDATION_FAILED
+    assert result.terminal_result.diagnostics.safe_context == {
+        "schema_ref": "schema://answer/v1",
+        "schema_name": "answer",
+        "schema_version": "1",
+        "schema_fingerprint": "sha256:answer",
+        "validation_stage": "host_validator",
+        "validator_exception": "RuntimeError",
+    }
 
 
 def test_missing_schema_resolution_blocks_provider_attempts() -> None:
@@ -147,8 +213,31 @@ def _answer_schema(ref: str) -> SchemaResolution:
         name="answer",
         version="1",
         fingerprint="sha256:answer",
-        json_schema={"type": "object", "required": ["answer"]},
+        json_schema={
+            "type": "object",
+            "required": ["answer"],
+            "properties": {"answer": {"type": "string"}},
+            "additionalProperties": False,
+        },
         validate=lambda value: bool(value.get("answer")),
+    )
+
+
+def _raising_schema(ref: str) -> SchemaResolution:
+    def _raise(_: object) -> bool:
+        raise RuntimeError("boom")
+
+    return resolved_schema(
+        ref=ref,
+        name="answer",
+        version="1",
+        fingerprint="sha256:answer",
+        json_schema={
+            "type": "object",
+            "required": ["answer"],
+            "properties": {"answer": {"type": "string"}},
+        },
+        validate=_raise,
     )
 
 

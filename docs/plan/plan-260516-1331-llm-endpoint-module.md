@@ -128,11 +128,11 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 | P3A fake provider adapter | `llm_endpoint.adapters.FakeProviderAdapter` provides deterministic provider-format execution for offline contract tests without network calls or secret leakage. |
 | P3B deadline pool router | `llm_endpoint.router.route_invocation` allocates candidate budgets from resolved policy, preserves ordered failover, retries only retryable availability failures, stops on non-retryable failures, records suppression skip reasons, protects the last eligible candidate, and returns `POOL_EXHAUSTED` when retryable attempts exhaust the pool. |
 | P3B telemetry and traces | `AttemptTrace`, `PoolRouteResult`, and router telemetry emit redacted `llm.pool.attempt`, `llm.endpoint.suppressed`, `llm.success`, `llm.failure`, and `llm.pool.exhausted` events with safe token usage propagation. |
-| P3C structured output pipeline | `llm_endpoint.structured.normalize_structured_provider_outcome` integrates schema resolution, JSON Schema/tool-call extraction modes, schema validation failure normalization, and schema fingerprint telemetry through the router path. |
+| P3C structured output pipeline | `llm_endpoint.structured.normalize_structured_provider_outcome` integrates schema resolution, JSON Schema/tool-call extraction modes, in-process schema validation, fail-closed host validator handoff, schema validation failure normalization, and schema fingerprint/pipeline telemetry through the router path. |
 | P3D config lifecycle | `llm_endpoint.config.RegistryLifecycle` validates full replacement configs before activation, preserves the last active identity on failed replacement, exposes active config identity, and supports rollback only to previously validated identities. |
 | P3 Gate contract | `tests/contracts/test_phase3_gate.py` proves canonical invocation -> active registry -> fake provider adapter -> router -> structured result/typed failure with redacted telemetry and no raw provider payload leakage. |
 | Zero BC policy | Clean-slate Phase 3 surfaces only; no version routers, legacy routing modes, deprecated adapter paths, compatibility facades, or migration shims were added. |
-| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `56 passed`. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `62 passed`. |
 
 ## Phase 4: Invocation Hardening
 

@@ -29,7 +29,11 @@ from llm_endpoint.results import (
     TypedFailure,
     failure,
 )
-from llm_endpoint.structured import StructuredOutputContext, normalize_structured_provider_outcome
+from llm_endpoint.structured import (
+    STRUCTURED_OUTPUT_PIPELINE_VERSION,
+    StructuredOutputContext,
+    normalize_structured_provider_outcome,
+)
 from llm_endpoint.telemetry import (
     TelemetryEmitter,
     TelemetryEvent,
@@ -689,6 +693,8 @@ def _success_event(
                 "schema_name": terminal.schema_name,
                 "schema_version": terminal.schema_version,
                 "schema_fingerprint": terminal.schema_fingerprint,
+                "structured_output_pipeline_version": STRUCTURED_OUTPUT_PIPELINE_VERSION,
+                "structured_output_mode": plan.effective_config.structured_output_mode.value,
             }
         )
     return telemetry_event(

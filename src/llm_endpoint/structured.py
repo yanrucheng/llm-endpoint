@@ -53,19 +53,29 @@ def normalize_structured_provider_outcome(
     if not isinstance(extracted_or_failure, Mapping):
         return extracted_or_failure
 
-    if context.schema.validate is not None and not context.schema.validate(extracted_or_failure):
-        return failure(
-            code=FailureCode.SCHEMA_VALIDATION_FAILED,
-            message="structured provider output failed schema validation",
-            operation_invocation_id=context.operation_invocation_id,
-            role=context.role,
-            operation_ref=context.operation_ref,
-            endpoint_uid=context.endpoint_uid,
-            policy_fingerprint=context.policy_fingerprint,
-            elapsed_ms=context.elapsed_ms,
-            attempt_trace_id=context.attempt_trace_id,
-            safe_context=_schema_context(context.schema),
+    if not _matches_json_schema(extracted_or_failure, context.schema.json_schema):
+        return _schema_validation_failure(
+            context,
+            validation_stage="json_schema",
+            message="structured provider output failed json schema validation",
         )
+
+    if context.schema.validate is not None:
+        try:
+            is_valid = context.schema.validate(extracted_or_failure)
+        except Exception as exc:  # pragma: no cover - host validator behavior is external.
+            return _schema_validation_failure(
+                context,
+                validation_stage="host_validator",
+                message="structured provider output validator raised",
+                extra_context={"validator_exception": exc.__class__.__name__},
+            )
+        if not is_valid:
+            return _schema_validation_failure(
+                context,
+                validation_stage="host_validator",
+                message="structured provider output failed host validation",
+            )
 
     return StructuredResult(
         value=dict(extracted_or_failure),
@@ -77,6 +87,98 @@ def normalize_structured_provider_outcome(
         policy_fingerprint=context.policy_fingerprint,
         elapsed_ms=context.elapsed_ms,
     )
+
+
+def _schema_validation_failure(
+    context: StructuredOutputContext,
+    *,
+    validation_stage: str,
+    message: str,
+    extra_context: Mapping[str, str] | None = None,
+) -> TerminalResult:
+    safe_context = {
+        **_schema_context(context.schema),
+        "validation_stage": validation_stage,
+    }
+    if extra_context is not None:
+        safe_context.update(extra_context)
+    return failure(
+        code=FailureCode.SCHEMA_VALIDATION_FAILED,
+        message=message,
+        operation_invocation_id=context.operation_invocation_id,
+        role=context.role,
+        operation_ref=context.operation_ref,
+        endpoint_uid=context.endpoint_uid,
+        policy_fingerprint=context.policy_fingerprint,
+        elapsed_ms=context.elapsed_ms,
+        attempt_trace_id=context.attempt_trace_id,
+        safe_context=safe_context,
+    )
+
+
+def _matches_json_schema(value: Mapping[str, Any], schema: Mapping[str, Any]) -> bool:
+    """Apply the supported in-process JSON Schema subset before host validation."""
+
+    schema_type = schema.get("type")
+    if schema_type is not None and schema_type != "object":
+        return False
+
+    required = schema.get("required", ())
+    if not isinstance(required, tuple | list):
+        return False
+    if any(not isinstance(key, str) or key not in value for key in required):
+        return False
+
+    properties = schema.get("properties", {})
+    if properties is not None and not isinstance(properties, Mapping):
+        return False
+    if isinstance(properties, Mapping):
+        for key, rules in properties.items():
+            if key in value and isinstance(rules, Mapping) and not _matches_property_schema(
+                value[key],
+                rules,
+            ):
+                return False
+
+    if schema.get("additionalProperties") is False and isinstance(properties, Mapping):
+        allowed_keys = set(properties)
+        if any(key not in allowed_keys for key in value):
+            return False
+
+    return True
+
+
+def _matches_property_schema(value: Any, rules: Mapping[str, Any]) -> bool:
+    if "const" in rules and value != rules["const"]:
+        return False
+    allowed_values = rules.get("enum")
+    if allowed_values is not None and value not in allowed_values:
+        return False
+
+    expected_type = rules.get("type")
+    if expected_type is None:
+        return True
+    return _matches_json_type(value, expected_type)
+
+
+def _matches_json_type(value: Any, expected_type: Any) -> bool:
+    if isinstance(expected_type, list | tuple):
+        return any(_matches_json_type(value, item) for item in expected_type)
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "number":
+        return isinstance(value, int | float) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "object":
+        return isinstance(value, Mapping)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "null":
+        return value is None
+    return False
 
 
 def _extract_payload(
@@ -96,6 +198,7 @@ def _extract_payload(
             elapsed_ms=context.elapsed_ms,
             attempt_trace_id=context.attempt_trace_id,
         )
+    assert payload is not None
 
     content = payload.content
     if not isinstance(content, Mapping):
