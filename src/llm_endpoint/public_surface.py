@@ -83,12 +83,32 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         negative_fixture="tests/contracts/test_policy_contract.py::test_policy_hard_cap_violation",
     ),
     PublicSurface(
+        name="llm_endpoint.invocation",
+        kind=SurfaceKind.API,
+        owner="api-owner",
+        version_rule="Invocation facade v1 is direct API only; no compatibility facade.",
+        positive_fixture="tests/contracts/test_invocation_contract.py::test_invocation_plan_contract",
+        negative_fixture="tests/contracts/test_invocation_contract.py::test_invalid_invocation_returns_typed_failure",
+    ),
+    PublicSurface(
         name="llm_endpoint.results",
         kind=SurfaceKind.RESULT_CONTRACT,
         owner="runtime-owner",
         version_rule="Result and failure meanings are replaced cleanly until V1 release freeze.",
         positive_fixture="tests/contracts/test_results_contract.py::test_success_result_contracts",
         negative_fixture="tests/contracts/test_results_contract.py::test_failure_contract_is_safe",
+    ),
+    PublicSurface(
+        name="llm_endpoint.normalization",
+        kind=SurfaceKind.RESULT_CONTRACT,
+        owner="runtime-owner",
+        version_rule="Provider outcome normalization is Zero BC before V1 release freeze.",
+        positive_fixture=(
+            "tests/contracts/test_results_contract.py::test_provider_failure_normalization"
+        ),
+        negative_fixture=(
+            "tests/contracts/test_results_contract.py::test_structured_payload_requires_pipeline"
+        ),
     ),
     PublicSurface(
         name="llm_endpoint.results.FailureCode",
@@ -107,6 +127,14 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         ),
         positive_fixture="tests/contracts/test_telemetry_contract.py::test_redacted_event_contract",
         negative_fixture="tests/contracts/test_telemetry_contract.py::test_forbidden_telemetry_fields_fail_closed",
+    ),
+    PublicSurface(
+        name="llm_endpoint.smoke",
+        kind=SurfaceKind.VALIDATION_API,
+        owner="test-owner",
+        version_rule="Offline smoke API v1 is clean-slate and performs no live calls.",
+        positive_fixture="tests/contracts/test_smoke_contract.py::test_offline_smoke_report_contract",
+        negative_fixture="tests/contracts/test_smoke_contract.py::test_offline_smoke_invalid_config_fails_closed",
     ),
     PublicSurface(
         name="llm_endpoint.callbacks",

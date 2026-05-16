@@ -63,6 +63,17 @@ from llm_endpoint.fixtures import (
     assert_fixture_manifest_complete,
     fixtures_by_area,
 )
+from llm_endpoint.invocation import (
+    INVOCATION_FACADE_VERSION,
+    InvocationPlan,
+    InvocationRequest,
+    invoke_plan,
+)
+from llm_endpoint.normalization import (
+    NORMALIZER_VERSION,
+    is_retryable_provider_outcome,
+    normalize_provider_outcome,
+)
 from llm_endpoint.policy import (
     POLICY_RESOLVER_VERSION,
     CallerPolicyOverrides,
@@ -86,12 +97,21 @@ from llm_endpoint.results import (
     TypedFailure,
     failure,
 )
+from llm_endpoint.smoke import (
+    OFFLINE_SMOKE_VERSION,
+    OfflineSmokeReport,
+    SmokeCheck,
+    SmokeCheckName,
+    run_offline_smoke,
+)
 from llm_endpoint.telemetry import (
     TELEMETRY_SCHEMA_VERSION,
     RedactionStatus,
     TelemetryContext,
+    TelemetryEmitter,
     TelemetryEvent,
     TelemetryEventFamily,
+    TelemetrySink,
     TokenUsage,
     telemetry_event,
 )
@@ -105,6 +125,9 @@ __all__ = [
     "DEFAULT_CAPABILITY_CATALOG",
     "FAILURE_TAXONOMY_VERSION",
     "FIXTURE_MANIFEST_VERSION",
+    "INVOCATION_FACADE_VERSION",
+    "NORMALIZER_VERSION",
+    "OFFLINE_SMOKE_VERSION",
     "PROVIDER_ADAPTER_CONTRACT_VERSION",
     "POLICY_RESOLVER_VERSION",
     "PUBLIC_SURFACES",
@@ -128,9 +151,12 @@ __all__ = [
     "FailureContext",
     "FixtureArea",
     "FixturePolarity",
+    "InvocationPlan",
+    "InvocationRequest",
     "LLMEndpointConfig",
     "OperationConfig",
     "OperationRuntimePolicy",
+    "OfflineSmokeReport",
     "PlainTextResult",
     "PolicyField",
     "PolicyResolution",
@@ -156,11 +182,15 @@ __all__ = [
     "SecretResolutionStatus",
     "SecretResolver",
     "SecretValue",
+    "SmokeCheck",
+    "SmokeCheckName",
     "StructuredResult",
     "StructuredOutputMode",
     "TelemetryContext",
+    "TelemetryEmitter",
     "TelemetryEvent",
     "TelemetryEventFamily",
+    "TelemetrySink",
     "TerminalResult",
     "TypedFailure",
     "TokenUsage",
@@ -170,7 +200,10 @@ __all__ = [
     "config_identity",
     "failure",
     "fixtures_by_area",
+    "invoke_plan",
+    "is_retryable_provider_outcome",
     "missing_secret",
+    "normalize_provider_outcome",
     "policy_fingerprint",
     "provider_failure",
     "provider_success",
@@ -178,6 +211,7 @@ __all__ = [
     "resolve_role",
     "resolved_schema",
     "resolved_secret",
+    "run_offline_smoke",
     "telemetry_event",
     "validate_config",
 ]

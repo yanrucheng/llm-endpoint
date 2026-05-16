@@ -3,6 +3,7 @@ import pytest
 from llm_endpoint.results import FailureClass
 from llm_endpoint.telemetry import (
     RedactionStatus,
+    TelemetryEmitter,
     TelemetryEventFamily,
     TokenUsage,
     telemetry_event,
@@ -37,3 +38,21 @@ def test_forbidden_telemetry_fields_fail_closed() -> None:
             operation_invocation_id="inv-2",
             attributes={"raw_response": "provider payload"},
         )
+
+
+def test_telemetry_emitter_is_best_effort() -> None:
+    def failing_sink(_event: object) -> None:
+        raise RuntimeError("sink unavailable")
+
+    emitter = TelemetryEmitter(sink=failing_sink)
+    event = telemetry_event(
+        family=TelemetryEventFamily.REGISTRY_VALIDATED,
+        operation_invocation_id="inv-3",
+        attributes={"ok": "true"},
+    )
+
+    emitted = emitter.emit(event)
+
+    assert emitted is event
+    assert emitter.captured_events == [event]
+    assert emitter.sink_failures == ["RuntimeError"]

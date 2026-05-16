@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Protocol
 
 from llm_endpoint.results import FailureClass
 
@@ -107,6 +108,38 @@ class TelemetryEvent:
         if unsafe_keys:
             names = ", ".join(sorted(unsafe_keys))
             raise ValueError(f"telemetry attributes contain forbidden fields: {names}")
+
+
+class TelemetrySink(Protocol):
+    """Host-owned sink for already-redacted telemetry events."""
+
+    def __call__(self, event: TelemetryEvent) -> None: ...
+
+
+@dataclass(slots=True)
+class TelemetryEmitter:
+    """Best-effort emitter that records events without affecting terminal outcomes."""
+
+    sink: TelemetrySink | None = None
+    captured_events: list[TelemetryEvent] = field(default_factory=list)
+    sink_failures: list[str] = field(default_factory=list)
+
+    def emit(self, event: TelemetryEvent) -> TelemetryEvent:
+        """Capture and optionally forward a redacted event."""
+
+        self.captured_events.append(event)
+        if self.sink is None:
+            return event
+        try:
+            self.sink(event)
+        except Exception as exc:  # pragma: no cover - sink behavior is host-owned.
+            self.sink_failures.append(exc.__class__.__name__)
+        return event
+
+    def emit_all(self, events: tuple[TelemetryEvent, ...]) -> tuple[TelemetryEvent, ...]:
+        """Emit a batch while preserving input order."""
+
+        return tuple(self.emit(event) for event in events)
 
 
 def forbidden_attribute_keys(attributes: Mapping[str, str]) -> frozenset[str]:

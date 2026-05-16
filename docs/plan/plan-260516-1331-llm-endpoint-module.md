@@ -93,15 +93,19 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 
 **Failure blocker:** Execution components remain blocked if registry, capability, policy, failure, and telemetry contracts are not integrated through the public invocation facade.
 
-**Partial result:** P2A-P2C completed on 2026-05-16. Phase 2 gate remains open until P2D-P2G are complete.
+**Gate result:** Passed on 2026-05-16.
 
 | Check | Evidence |
 |---|---|
 | P2A registry/config validator | `llm_endpoint.config.build_registry`, `Registry.resolve_role`, and `Registry.resolve_operation_policy` validate and index config offline with deterministic `config_identity`. |
 | P2B capability catalog | `llm_endpoint.capabilities.DEFAULT_CAPABILITY_CATALOG` provides provider-format/model-family facts, evidence metadata, hard limits, and fail-closed unknown-family lookup. |
 | P2C runtime policy resolver | `llm_endpoint.policy.resolve_policy` resolves effective runtime config, provenance, policy fingerprint, override validation, hard-cap enforcement, and redacted `llm.policy.resolved` telemetry. |
+| P2D result/failure normalizer | `llm_endpoint.normalization.normalize_provider_outcome` maps provider outcomes to one public terminal result with stable retryability, failure class, safe provider status, and no raw payload leakage. |
+| P2E telemetry emitter | `llm_endpoint.telemetry.TelemetryEmitter` captures and best-effort forwards redacted registry, policy, failure, and smoke events without corrupting terminal outcomes. |
+| P2F public invocation facade | `llm_endpoint.invocation.invoke_plan` validates canonical direct invocation input, handles operation invocation IDs, resolves registry/policy/schema refs, and returns a no-provider-call `InvocationPlan` or typed failure. |
+| P2G offline smoke API shell | `llm_endpoint.smoke.run_offline_smoke` returns a machine-readable `OfflineSmokeReport` for config, registry, invocation planning, and telemetry checks without network calls or secret resolution. |
 | Zero BC policy | New public surfaces are direct `v1` clean-slate contracts; no version routers, deprecated fields, compatibility adapters, or legacy precedence paths were added. |
-| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `28 passed`. |
+| Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `37 passed`. |
 
 ## Phase 3: Execution Components
 
@@ -262,6 +266,7 @@ graph LR
 
 | Date | Change |
 |---|---|
+| 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning facade, offline smoke API shell, and contract coverage. |
 | 2026-05-16 | Passed Phase 1 gate, added gate evidence, and aligned the plan to Zero BC with no migration facade. |
 | 2026-05-16 | Tightened the plan for true same-phase independence: corrected component count, split dependent execution work into five phases, added config lifecycle, Zero BC guard, revised metrics, and replaced the dependency graph. |
 | 2026-05-16 | Initial development plan derived from technical design. |

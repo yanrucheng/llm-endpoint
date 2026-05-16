@@ -1,5 +1,7 @@
 import pytest
 
+from llm_endpoint.adapters import ProviderOutcomeKind, provider_failure, provider_success
+from llm_endpoint.normalization import normalize_provider_outcome
 from llm_endpoint.results import (
     FAILURE_CLASS_BY_CODE,
     RETRYABILITY_BY_CODE,
@@ -7,6 +9,7 @@ from llm_endpoint.results import (
     PlainTextResult,
     Retryability,
     StructuredResult,
+    TypedFailure,
     failure,
 )
 
@@ -73,3 +76,39 @@ def test_structured_result_requires_schema_identity() -> None:
             elapsed_ms=0,
         )
 
+
+def test_provider_failure_normalization() -> None:
+    result = normalize_provider_outcome(
+        provider_failure(
+            kind=ProviderOutcomeKind.TIMEOUT,
+            endpoint_uid="primary",
+            elapsed_ms=120,
+            failure_code=FailureCode.PROVIDER_TIMEOUT,
+            safe_provider_status={"status": "timeout"},
+        ),
+        operation_invocation_id="inv-5",
+        role="writer",
+        operation_ref="draft",
+        policy_fingerprint="policy-1",
+        attempt_trace_id="trace-1",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.PROVIDER_TIMEOUT
+    assert result.is_retryable is True
+    assert result.diagnostics.safe_context == {"provider_status.status": "timeout"}
+
+
+def test_structured_payload_requires_pipeline() -> None:
+    result = normalize_provider_outcome(
+        provider_success(
+            endpoint_uid="primary",
+            elapsed_ms=12,
+            content={"answer": "ok"},
+        ),
+        operation_invocation_id="inv-6",
+        policy_fingerprint="policy-1",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.MALFORMED_PROVIDER_OUTPUT

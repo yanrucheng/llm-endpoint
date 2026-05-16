@@ -17,9 +17,12 @@ def test_manifest_surfaces_are_owned() -> None:
     assert "llm_endpoint.config" in names
     assert "llm_endpoint.capabilities" in names
     assert "llm_endpoint.policy" in names
+    assert "llm_endpoint.invocation" in names
     assert "llm_endpoint.results" in names
     assert "llm_endpoint.results.FailureCode" in names
+    assert "llm_endpoint.normalization" in names
     assert "llm_endpoint.telemetry" in names
+    assert "llm_endpoint.smoke" in names
     assert "llm_endpoint.callbacks" in names
     assert "llm_endpoint.adapters" in names
     assert "llm_endpoint.fixtures" in names
