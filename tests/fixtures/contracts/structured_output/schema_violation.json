@@ -1,0 +1,7 @@
+{
+  "area": "structured_output",
+  "fixture": "schema_violation",
+  "polarity": "negative",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

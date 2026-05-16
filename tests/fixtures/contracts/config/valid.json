@@ -1,0 +1,7 @@
+{
+  "area": "config",
+  "fixture": "valid_config",
+  "polarity": "positive",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

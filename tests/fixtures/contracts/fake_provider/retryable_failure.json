@@ -1,0 +1,7 @@
+{
+  "area": "fake_provider",
+  "fixture": "fake_retryable_failure",
+  "polarity": "negative",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

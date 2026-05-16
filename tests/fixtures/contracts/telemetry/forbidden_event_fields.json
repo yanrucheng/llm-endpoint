@@ -1,0 +1,7 @@
+{
+  "area": "telemetry",
+  "fixture": "forbidden_event_fields",
+  "polarity": "negative",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

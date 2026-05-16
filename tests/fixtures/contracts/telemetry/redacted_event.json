@@ -1,0 +1,7 @@
+{
+  "area": "telemetry",
+  "fixture": "redacted_event",
+  "polarity": "positive",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

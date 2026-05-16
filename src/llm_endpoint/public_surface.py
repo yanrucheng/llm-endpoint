@@ -79,33 +79,41 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         name="llm_endpoint.telemetry",
         kind=SurfaceKind.TELEMETRY_SCHEMA,
         owner="observability-owner",
-        version_rule="Reserved Phase 1D surface; not exported until implemented.",
-        positive_fixture=None,
-        negative_fixture=None,
+        version_rule=(
+            "Telemetry schema v1 replaces pre-V1 contracts directly; no legacy event routers."
+        ),
+        positive_fixture="tests/contracts/test_telemetry_contract.py::test_redacted_event_contract",
+        negative_fixture="tests/contracts/test_telemetry_contract.py::test_forbidden_telemetry_fields_fail_closed",
     ),
     PublicSurface(
         name="llm_endpoint.callbacks",
         kind=SurfaceKind.HOST_CALLBACK,
         owner="integration-owner",
-        version_rule="Reserved Phase 1E surface; not exported until implemented.",
-        positive_fixture=None,
-        negative_fixture=None,
+        version_rule=(
+            "Host callback contracts are Zero BC before V1; no legacy secret/schema adapters."
+        ),
+        positive_fixture="tests/contracts/test_callbacks_contract.py::test_secret_resolution_contract_is_redacted",
+        negative_fixture="tests/contracts/test_callbacks_contract.py::test_schema_identity_is_required",
     ),
     PublicSurface(
         name="llm_endpoint.adapters",
         kind=SurfaceKind.PROVIDER_ADAPTER,
         owner="adapter-owner",
-        version_rule="Reserved Phase 1F surface; not exported until implemented.",
-        positive_fixture=None,
-        negative_fixture=None,
+        version_rule=(
+            "Provider adapter contract v1 is clean-slate; raw provider payloads are prohibited."
+        ),
+        positive_fixture="tests/contracts/test_adapters_contract.py::test_provider_success_contract",
+        negative_fixture="tests/contracts/test_adapters_contract.py::test_raw_provider_status_fields_are_rejected",
     ),
     PublicSurface(
-        name="tests/contracts",
+        name="llm_endpoint.fixtures",
         kind=SurfaceKind.FIXTURE_SCHEMA,
         owner="test-owner",
-        version_rule="Fixture layout is replaced cleanly until V1 release freeze.",
-        positive_fixture="tests/contracts",
-        negative_fixture="tests/contracts",
+        version_rule=(
+            "Fixture skeletons are replaced cleanly before V1; no deprecated fixture layouts."
+        ),
+        positive_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_covers_required_areas",
+        negative_fixture="tests/contracts/test_fixture_manifest.py::test_fixture_manifest_has_positive_and_negative_coverage",
     ),
     PublicSurface(
         name="llm_endpoint.migration",
@@ -143,4 +151,3 @@ def assert_manifest_complete() -> None:
     if missing_metadata:
         names = ", ".join(sorted(missing_metadata))
         raise ValueError(f"public surfaces missing ownership metadata: {names}")
-

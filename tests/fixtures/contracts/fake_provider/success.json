@@ -1,0 +1,7 @@
+{
+  "area": "fake_provider",
+  "fixture": "fake_success",
+  "polarity": "positive",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

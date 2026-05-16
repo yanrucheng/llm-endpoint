@@ -1,0 +1,7 @@
+{
+  "area": "policy",
+  "fixture": "budget_violation",
+  "polarity": "negative",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

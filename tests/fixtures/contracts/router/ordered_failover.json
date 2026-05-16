@@ -1,0 +1,7 @@
+{
+  "area": "router",
+  "fixture": "ordered_failover",
+  "polarity": "positive",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

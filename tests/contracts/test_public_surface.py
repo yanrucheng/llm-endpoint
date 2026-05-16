@@ -17,6 +17,10 @@ def test_manifest_surfaces_are_owned() -> None:
     assert "llm_endpoint.config" in names
     assert "llm_endpoint.results" in names
     assert "llm_endpoint.results.FailureCode" in names
+    assert "llm_endpoint.telemetry" in names
+    assert "llm_endpoint.callbacks" in names
+    assert "llm_endpoint.adapters" in names
+    assert "llm_endpoint.fixtures" in names
 
 
 def test_manifest_uses_zero_bc() -> None:
@@ -29,3 +33,16 @@ def test_manifest_uses_zero_bc() -> None:
     assert len(config_surfaces) == 1
     assert "no legacy loaders" in config_surfaces[0].version_rule
 
+
+def test_phase_1_d_to_g_surfaces_have_fixtures() -> None:
+    names = {
+        "llm_endpoint.telemetry",
+        "llm_endpoint.callbacks",
+        "llm_endpoint.adapters",
+        "llm_endpoint.fixtures",
+    }
+    surfaces = {surface.name: surface for surface in PUBLIC_SURFACES if surface.name in names}
+
+    assert set(surfaces) == names
+    assert all(surface.positive_fixture for surface in surfaces.values())
+    assert all(surface.negative_fixture for surface in surfaces.values())

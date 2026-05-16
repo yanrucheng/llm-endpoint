@@ -1,0 +1,7 @@
+{
+  "area": "adapter_parity",
+  "fixture": "raw_provider_leak",
+  "polarity": "negative",
+  "schema_version": "v1",
+  "status": "skeleton"
+}

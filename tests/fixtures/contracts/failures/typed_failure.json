@@ -1,0 +1,7 @@
+{
+  "area": "failures",
+  "fixture": "typed_failure",
+  "polarity": "positive",
+  "schema_version": "v1",
+  "status": "skeleton"
+}
