@@ -14,6 +14,7 @@ from llm_endpoint.migration import DirectMigrationRequest, assess_direct_migrati
 from llm_endpoint.public_surface import PUBLIC_SURFACES
 from llm_endpoint.release_guard import (
     CompatibilityIssueCode,
+    PublicSurfaceSnapshot,
     capture_public_surface_baseline,
     check_public_surface_release,
 )
@@ -149,6 +150,44 @@ def test_phase_5c_release_guard_requires_changelog_and_migration_notes() -> None
     assert CompatibilityIssueCode.MISSING_MIGRATION_NOTE in codes
 
 
+def test_phase_5c_release_guard_requires_clean_slate_remediation_evidence() -> None:
+    baseline = _pre_remediation_baseline()
+
+    report = check_public_surface_release(
+        current_surfaces=PUBLIC_SURFACES,
+        baseline=baseline,
+        changelog_entries=("public surface: replace result and telemetry contracts",),
+        migration_notes=("zero bc: consumers adopt current contracts directly",),
+        package_version="0.1.0",
+    )
+    codes = {issue.code for issue in report.issues}
+
+    assert report.ok is False
+    assert CompatibilityIssueCode.PUBLIC_SURFACE_CHANGED in codes
+    assert CompatibilityIssueCode.MISSING_CLEAN_SLATE_BASELINE_EVIDENCE in codes
+
+
+def test_phase_5c_release_guard_accepts_prd_remediation_clean_slate_baseline() -> None:
+    baseline = _pre_remediation_baseline()
+
+    report = check_public_surface_release(
+        current_surfaces=PUBLIC_SURFACES,
+        baseline=baseline,
+        changelog_entries=(
+            "public surface: failure taxonomy and telemetry schema are the "
+            "PRD remediation clean-slate baseline",
+        ),
+        migration_notes=(
+            "zero bc: no aliases; consumers adopt the clean-slate baseline for "
+            "failure taxonomy and telemetry schema",
+        ),
+        package_version="0.1.0",
+    )
+
+    assert report.ok is True
+    assert report.issues == ()
+
+
 def test_phase_5f_live_smoke_skips_without_explicit_consent() -> None:
     report = run_optional_live_smoke(
         config=_config(),
@@ -225,6 +264,27 @@ def _plan(operation_invocation_id: str) -> InvocationPlan:
 
     assert isinstance(result, InvocationPlan)
     return result
+
+
+def _pre_remediation_baseline() -> tuple[PublicSurfaceSnapshot, ...]:
+    replacements = {
+        "llm_endpoint.results.FailureCode": (
+            "Failure taxonomy is Zero BC before V1 release freeze."
+        ),
+        "llm_endpoint.telemetry": (
+            "Telemetry schema v1 replaces pre-V1 contracts directly; no legacy event routers."
+        ),
+    }
+    return tuple(
+        PublicSurfaceSnapshot(
+            name=surface.name,
+            kind=surface.kind,
+            owner=surface.owner,
+            version_rule=replacements.get(surface.name, surface.version_rule),
+            compatibility_level=surface.compatibility_level,
+        )
+        for surface in capture_public_surface_baseline(PUBLIC_SURFACES)
+    )
 
 
 def _config(schema_ref: str | None = "schema://draft/v1") -> LLMEndpointConfig:

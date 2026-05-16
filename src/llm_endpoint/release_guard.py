@@ -22,6 +22,7 @@ class CompatibilityIssueCode(StrEnum):
     NON_ZERO_BC_SURFACE = "non_zero_bc_surface"
     MISSING_CHANGELOG = "missing_changelog"
     MISSING_MIGRATION_NOTE = "missing_migration_note"
+    MISSING_CLEAN_SLATE_BASELINE_EVIDENCE = "missing_clean_slate_baseline_evidence"
     PUBLIC_SURFACE_ADDED = "public_surface_added"
     PUBLIC_SURFACE_REMOVED = "public_surface_removed"
     PUBLIC_SURFACE_CHANGED = "public_surface_changed"
@@ -96,12 +97,18 @@ def check_public_surface_release(
     """Enforce Zero BC surface policy and release-note evidence."""
 
     current = tuple(current_surfaces)
+    changelog_entries = tuple(changelog_entries)
+    migration_notes = tuple(migration_notes)
     baseline_by_name = {surface.name: surface for surface in baseline}
     current_by_name = {surface.name: surface for surface in current}
     issues: list[CompatibilityIssue] = []
 
     issues.extend(_zero_bc_issues(current))
     surface_diff_issues = _surface_diff_issues(current_by_name, baseline_by_name)
+    remediation_diff_issues = _remediation_baseline_diff_issues(
+        current_by_name,
+        baseline_by_name,
+    )
     if surface_diff_issues and not _contains_evidence(changelog_entries, "public surface"):
         issues.extend(surface_diff_issues)
         issues.append(
@@ -116,6 +123,20 @@ def check_public_surface_release(
             CompatibilityIssue(
                 code=CompatibilityIssueCode.MISSING_MIGRATION_NOTE,
                 message="public surface changes require Zero BC migration notes",
+            )
+        )
+    if remediation_diff_issues and not _has_clean_slate_remediation_evidence(
+        changelog_entries=changelog_entries,
+        migration_notes=migration_notes,
+    ):
+        issues.extend(remediation_diff_issues)
+        issues.append(
+            CompatibilityIssue(
+                code=CompatibilityIssueCode.MISSING_CLEAN_SLATE_BASELINE_EVIDENCE,
+                message=(
+                    "failure taxonomy and telemetry schema changes require clean-slate "
+                    "baseline evidence"
+                ),
             )
         )
     if not package_version.startswith("0."):
@@ -182,6 +203,22 @@ def _surface_diff_issues(
     return tuple(issues)
 
 
+def _remediation_baseline_diff_issues(
+    current_by_name: Mapping[str, PublicSurface],
+    baseline_by_name: Mapping[str, PublicSurfaceSnapshot],
+) -> tuple[CompatibilityIssue, ...]:
+    remediation_surfaces = {
+        surface.name
+        for surface in current_by_name.values()
+        if surface.kind in {SurfaceKind.FAILURE_TAXONOMY, SurfaceKind.TELEMETRY_SCHEMA}
+    }
+    return tuple(
+        issue
+        for issue in _surface_diff_issues(current_by_name, baseline_by_name)
+        if issue.surface_name in remediation_surfaces
+    )
+
+
 def _snapshot(surface: PublicSurface) -> PublicSurfaceSnapshot:
     return PublicSurfaceSnapshot(
         name=surface.name,
@@ -198,3 +235,19 @@ def _kind_value(kind: SurfaceKind | str) -> str:
 
 def _contains_evidence(entries: Iterable[str], phrase: str) -> bool:
     return any(phrase in entry.lower() for entry in entries)
+
+
+def _has_clean_slate_remediation_evidence(
+    *,
+    changelog_entries: Iterable[str],
+    migration_notes: Iterable[str],
+) -> bool:
+    release_evidence = " ".join(entry.lower() for entry in changelog_entries)
+    migration_evidence = " ".join(entry.lower() for entry in migration_notes)
+    combined_evidence = f"{release_evidence} {migration_evidence}"
+    return (
+        "clean-slate baseline" in combined_evidence
+        and "failure taxonomy" in combined_evidence
+        and "telemetry schema" in combined_evidence
+        and "zero bc" in migration_evidence
+    )

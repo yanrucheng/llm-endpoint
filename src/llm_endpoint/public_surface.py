@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase5def"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.prd-remediation-p3c"
 
 
 class CompatibilityLevel(StrEnum):
@@ -138,7 +138,10 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         name="llm_endpoint.results.FailureCode",
         kind=SurfaceKind.FAILURE_TAXONOMY,
         owner="runtime-owner",
-        version_rule="Failure taxonomy is Zero BC before V1 release freeze.",
+        version_rule=(
+            "Failure taxonomy clean-slate baseline is the PRD llm.* public code set; "
+            "old compact codes and aliases are prohibited."
+        ),
         positive_fixture="tests/contracts/test_results_contract.py::test_failure_codes_are_public",
         negative_fixture="tests/contracts/test_results_contract.py::test_failure_contract_is_safe",
     ),
@@ -147,7 +150,8 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         kind=SurfaceKind.TELEMETRY_SCHEMA,
         owner="observability-owner",
         version_rule=(
-            "Telemetry schema v1 replaces pre-V1 contracts directly; no legacy event routers."
+            "Telemetry schema clean-slate baseline includes structured failure schema identity; "
+            "legacy failure-event shapes are prohibited."
         ),
         positive_fixture="tests/contracts/test_telemetry_contract.py::test_redacted_event_contract",
         negative_fixture="tests/contracts/test_telemetry_contract.py::test_forbidden_telemetry_fields_fail_closed",
