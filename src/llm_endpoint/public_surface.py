@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase3"
+PUBLIC_SURFACE_MANIFEST_VERSION = "2026-05-16.phase4ab"
 
 
 class CompatibilityLevel(StrEnum):

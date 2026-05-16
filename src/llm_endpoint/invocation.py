@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from llm_endpoint.capabilities import DEFAULT_CAPABILITY_CATALOG, CapabilityCatalog
@@ -32,6 +32,14 @@ from llm_endpoint.telemetry import (
 INVOCATION_FACADE_VERSION = "v1"
 
 
+class CancellationToken(Protocol):
+    """Host-owned cancellation signal shared by sync and async invocation paths."""
+
+    def is_cancelled(self) -> bool:
+        """Return true once the caller has cancelled the operation."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class InvocationRequest:
     """Canonical direct invocation input accepted by the public facade."""
@@ -44,6 +52,7 @@ class InvocationRequest:
     caller_overrides: CallerPolicyOverrides | None = None
     request_metadata: Mapping[str, str] = field(default_factory=dict)
     operation_invocation_id: str | None = None
+    cancellation_token: CancellationToken | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +70,7 @@ class InvocationPlan:
     policy_fingerprint: str
     schema_contract_ref: str | None = None
     request_metadata: Mapping[str, str] = field(default_factory=dict)
+    cancellation_token: CancellationToken | None = None
     telemetry: tuple[TelemetryEvent, ...] = ()
     facade_version: str = INVOCATION_FACADE_VERSION
 
@@ -164,6 +174,7 @@ def invoke_plan(
         policy_fingerprint=policy_result.policy_fingerprint,
         schema_contract_ref=schema_ref_or_failure,
         request_metadata=dict(request.request_metadata),
+        cancellation_token=request.cancellation_token,
         telemetry=tuple(emitter.captured_events),
     )
 
@@ -287,6 +298,7 @@ def _emit_failure(emitter: TelemetryEmitter, typed_failure: TypedFailure) -> Non
     retryability = typed_failure.retryability
     if retryability is None:
         raise ValueError("typed failures must carry retryability after normalization")
+    retryability_value = retryability.value
     emitter.emit(
         telemetry_event(
             family=TelemetryEventFamily.FAILURE,
@@ -299,7 +311,7 @@ def _emit_failure(emitter: TelemetryEmitter, typed_failure: TypedFailure) -> Non
             failure_class=typed_failure.failure_class,
             attributes={
                 "failure_code": typed_failure.code.value,
-                "retryability": retryability.value,
+                "retryability": retryability_value,
             },
         )
     )

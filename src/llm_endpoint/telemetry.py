@@ -41,6 +41,8 @@ class TelemetryEventFamily(StrEnum):
     FAILURE = "llm.failure"
     POOL_EXHAUSTED = "llm.pool.exhausted"
     DEADLINE_EXCEEDED = "llm.deadline.exceeded"
+    CANCELLATION = "llm.cancellation"
+    LATE_RESPONSE_DISCARDED = "llm.late_response.discarded"
     ENDPOINT_SUPPRESSED = "llm.endpoint.suppressed"
     BUDGET_VIOLATION = "llm.budget.violation"
     SMOKE_RESULT = "llm.smoke.result"

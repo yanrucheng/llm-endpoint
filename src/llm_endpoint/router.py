@@ -48,6 +48,8 @@ class AttemptStatus(StrEnum):
     SUCCESS = "success"
     RETRYABLE_FAILURE = "retryable_failure"
     TERMINAL_FAILURE = "terminal_failure"
+    CANCELLED = "cancelled"
+    LATE_RESPONSE_DISCARDED = "late_response_discarded"
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,12 @@ def route_invocation(
     last_retryable_failure: TypedFailure | None = None
 
     for candidate_index, endpoint_uid in enumerate(plan.endpoint_uids):
+        if _is_cancelled(plan):
+            terminal = _cancelled_failure(plan, elapsed_total_ms=elapsed_total_ms)
+            emitter.emit(_cancellation_event(terminal))
+            emitter.emit(_failure_event(terminal))
+            return _route_result(terminal, traces, emitter)
+
         if attempted >= plan.effective_config.max_attempts:
             break
 
@@ -125,6 +133,7 @@ def route_invocation(
                 policy_fingerprint=plan.policy_fingerprint,
                 elapsed_ms=elapsed_total_ms,
             )
+            emitter.emit(_deadline_event(terminal))
             emitter.emit(_failure_event(terminal))
             return _route_result(terminal, traces, emitter)
 
@@ -185,6 +194,49 @@ def route_invocation(
         )
         elapsed_ms = _elapsed_ms(attempt_output, attempt_terminal)
         elapsed_total_ms += elapsed_ms
+
+        if _is_cancelled(plan):
+            cancelled_terminal = _cancelled_failure(
+                plan,
+                endpoint_uid=endpoint_uid,
+                elapsed_total_ms=elapsed_total_ms,
+                attempt_trace_id=attempt_trace_id,
+            )
+            trace = _attempt_trace(
+                trace_id=attempt_trace_id,
+                endpoint_uid=endpoint_uid,
+                candidate_budget_ms=candidate_budget_ms,
+                terminal=cancelled_terminal,
+                suppression_protected=protected,
+            )
+            traces.append(trace)
+            emitter.emit(_attempt_event(plan, trace, attempt_output))
+            emitter.emit(_cancellation_event(cancelled_terminal))
+            emitter.emit(_late_response_event(plan, trace, attempt_output))
+            emitter.emit(_failure_event(cancelled_terminal))
+            return _route_result(cancelled_terminal, traces, emitter)
+
+        if elapsed_ms > candidate_budget_ms or elapsed_total_ms > plan.deadline_ms:
+            late_terminal = _late_response_failure(
+                plan,
+                endpoint_uid=endpoint_uid,
+                elapsed_total_ms=elapsed_total_ms,
+                attempt_trace_id=attempt_trace_id,
+                candidate_budget_ms=candidate_budget_ms,
+            )
+            trace = _attempt_trace(
+                trace_id=attempt_trace_id,
+                endpoint_uid=endpoint_uid,
+                candidate_budget_ms=candidate_budget_ms,
+                terminal=late_terminal,
+                suppression_protected=protected,
+            )
+            traces.append(trace)
+            emitter.emit(_attempt_event(plan, trace, attempt_output))
+            emitter.emit(_late_response_event(plan, trace, attempt_output))
+            emitter.emit(_failure_event(late_terminal))
+            return _route_result(late_terminal, traces, emitter)
+
         trace = _attempt_trace(
             trace_id=attempt_trace_id,
             endpoint_uid=endpoint_uid,
@@ -384,6 +436,58 @@ def _has_failover_candidate(
     return candidate_index < len(plan.endpoint_uids) - 1
 
 
+def _is_cancelled(plan: InvocationPlan) -> bool:
+    token = plan.cancellation_token
+    if token is None:
+        return False
+    return token.is_cancelled()
+
+
+def _cancelled_failure(
+    plan: InvocationPlan,
+    *,
+    elapsed_total_ms: int,
+    endpoint_uid: str | None = None,
+    attempt_trace_id: str | None = None,
+) -> TypedFailure:
+    return failure(
+        code=FailureCode.CANCELLED,
+        message="caller cancelled the invocation",
+        operation_invocation_id=plan.operation_invocation_id,
+        role=plan.role,
+        operation_ref=plan.operation_ref,
+        endpoint_uid=endpoint_uid,
+        policy_fingerprint=plan.policy_fingerprint,
+        elapsed_ms=elapsed_total_ms,
+        attempt_trace_id=attempt_trace_id,
+    )
+
+
+def _late_response_failure(
+    plan: InvocationPlan,
+    *,
+    endpoint_uid: str,
+    elapsed_total_ms: int,
+    attempt_trace_id: str,
+    candidate_budget_ms: int,
+) -> TypedFailure:
+    return failure(
+        code=FailureCode.LATE_RESPONSE_DISCARDED,
+        message="provider response arrived after the local deadline and was discarded",
+        operation_invocation_id=plan.operation_invocation_id,
+        role=plan.role,
+        operation_ref=plan.operation_ref,
+        endpoint_uid=endpoint_uid,
+        policy_fingerprint=plan.policy_fingerprint,
+        elapsed_ms=elapsed_total_ms,
+        attempt_trace_id=attempt_trace_id,
+        safe_context={
+            "candidate_budget_ms": str(candidate_budget_ms),
+            "deadline_ms": str(plan.deadline_ms),
+        },
+    )
+
+
 def _pool_exhausted(
     plan: InvocationPlan,
     traces: list[AttemptTrace],
@@ -429,11 +533,7 @@ def _attempt_trace(
     suppression_protected: bool,
 ) -> AttemptTrace:
     if isinstance(terminal, TypedFailure):
-        status = (
-            AttemptStatus.RETRYABLE_FAILURE
-            if terminal.is_retryable
-            else AttemptStatus.TERMINAL_FAILURE
-        )
+        status = _failure_attempt_status(terminal)
         return AttemptTrace(
             trace_id=trace_id,
             endpoint_uid=endpoint_uid,
@@ -443,14 +543,26 @@ def _attempt_trace(
             failure_code=terminal.code,
             suppression_protected=suppression_protected,
         )
-    return AttemptTrace(
-        trace_id=trace_id,
-        endpoint_uid=endpoint_uid,
-        status=AttemptStatus.SUCCESS,
-        candidate_budget_ms=candidate_budget_ms,
-        elapsed_ms=terminal.elapsed_ms,
-        suppression_protected=suppression_protected,
-    )
+    if isinstance(terminal, (PlainTextResult, StructuredResult)):
+        return AttemptTrace(
+            trace_id=trace_id,
+            endpoint_uid=endpoint_uid,
+            status=AttemptStatus.SUCCESS,
+            candidate_budget_ms=candidate_budget_ms,
+            elapsed_ms=terminal.elapsed_ms,
+            suppression_protected=suppression_protected,
+        )
+    raise TypeError("unknown terminal result type")
+
+
+def _failure_attempt_status(terminal: TypedFailure) -> AttemptStatus:
+    if terminal.code is FailureCode.CANCELLED:
+        return AttemptStatus.CANCELLED
+    if terminal.code is FailureCode.LATE_RESPONSE_DISCARDED:
+        return AttemptStatus.LATE_RESPONSE_DISCARDED
+    if terminal.is_retryable:
+        return AttemptStatus.RETRYABLE_FAILURE
+    return AttemptStatus.TERMINAL_FAILURE
 
 
 def _attempt_event(
@@ -493,6 +605,72 @@ def _suppression_event(plan: InvocationPlan, trace: AttemptTrace) -> TelemetryEv
             "skip_reason": trace.skip_reason or "suppressed",
             "router_version": ROUTER_VERSION,
         },
+    )
+
+
+def _cancellation_event(terminal: TypedFailure) -> TelemetryEvent:
+    return telemetry_event(
+        family=TelemetryEventFamily.CANCELLATION,
+        operation_invocation_id=terminal.context.operation_invocation_id,
+        role=terminal.context.role,
+        operation_ref=terminal.context.operation_ref,
+        endpoint_uid=terminal.context.endpoint_uid,
+        attempt_trace_id=(
+            terminal.context.attempt_trace.trace_id if terminal.context.attempt_trace else None
+        ),
+        policy_fingerprint=terminal.context.policy_fingerprint,
+        elapsed_ms=terminal.context.elapsed_ms,
+        failure_class=terminal.failure_class,
+        attributes={
+            "failure_code": terminal.code.value,
+            "router_version": ROUTER_VERSION,
+        },
+    )
+
+
+def _deadline_event(terminal: TypedFailure) -> TelemetryEvent:
+    return telemetry_event(
+        family=TelemetryEventFamily.DEADLINE_EXCEEDED,
+        operation_invocation_id=terminal.context.operation_invocation_id,
+        role=terminal.context.role,
+        operation_ref=terminal.context.operation_ref,
+        endpoint_uid=terminal.context.endpoint_uid,
+        attempt_trace_id=(
+            terminal.context.attempt_trace.trace_id if terminal.context.attempt_trace else None
+        ),
+        policy_fingerprint=terminal.context.policy_fingerprint,
+        elapsed_ms=terminal.context.elapsed_ms,
+        failure_class=terminal.failure_class,
+        attributes={
+            "failure_code": terminal.code.value,
+            "router_version": ROUTER_VERSION,
+        },
+    )
+
+
+def _late_response_event(
+    plan: InvocationPlan,
+    trace: AttemptTrace,
+    attempt_output: ProviderOutcome | TypedFailure,
+) -> TelemetryEvent:
+    token_usage = (
+        attempt_output.token_usage if isinstance(attempt_output, ProviderOutcome) else None
+    )
+    return telemetry_event(
+        family=TelemetryEventFamily.LATE_RESPONSE_DISCARDED,
+        operation_invocation_id=plan.operation_invocation_id,
+        role=plan.role,
+        operation_ref=plan.operation_ref,
+        endpoint_uid=trace.endpoint_uid,
+        attempt_trace_id=trace.trace_id,
+        policy_fingerprint=plan.policy_fingerprint,
+        elapsed_ms=trace.elapsed_ms,
+        attributes={
+            "status": trace.status.value,
+            "candidate_budget_ms": str(trace.candidate_budget_ms or 0),
+            "router_version": ROUTER_VERSION,
+        },
+        token_usage=token_usage,
     )
 
 

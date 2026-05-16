@@ -69,6 +69,7 @@ from llm_endpoint.fixtures import (
 )
 from llm_endpoint.invocation import (
     INVOCATION_FACADE_VERSION,
+    CancellationToken,
     InvocationPlan,
     InvocationRequest,
     invoke_plan,
@@ -157,6 +158,7 @@ __all__ = [
     "AttemptStatus",
     "AttemptTrace",
     "CallerPolicyOverrides",
+    "CancellationToken",
     "CapabilityCatalog",
     "CapabilityEvidence",
     "CapabilityFlag",
