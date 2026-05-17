@@ -29,6 +29,7 @@ class SmokeCheckName(StrEnum):
     CONFIG_VALIDATION = "config_validation"
     REGISTRY_BUILD = "registry_build"
     INVOCATION_PLANNING = "invocation_planning"
+    CANDIDATE_BUDGET_SIMULATION = "candidate_budget_simulation"
     TELEMETRY_REDACTION = "telemetry_redaction"
 
 
@@ -172,6 +173,17 @@ def run_offline_smoke(
             message="invocation planning passed",
         )
     )
+    budget_check = _candidate_budget_simulation_check(planned)
+    checks.append(budget_check)
+    if not budget_check.ok:
+        _smoke_event(emitter, False, len(checks), registry.config_identity)
+        return OfflineSmokeReport(
+            ok=False,
+            checks=tuple(checks),
+            events=tuple(emitter.captured_events),
+            config_identity=registry.config_identity,
+            plan=planned,
+        )
     checks.append(
         SmokeCheck(
             name=SmokeCheckName.TELEMETRY_REDACTION,
@@ -356,6 +368,51 @@ def _configured_deadline_ms(
     if operation is None:
         return 1_000
     return registry.policies_by_ref[operation.policy_ref].deadline_ms
+
+
+def _candidate_budget_simulation_check(plan: InvocationPlan) -> SmokeCheck:
+    remaining_ms = plan.deadline_ms
+    budgets: list[str] = []
+    overrides = dict(plan.effective_config.candidate_budget_overrides_ms or ())
+    for candidate_index, endpoint_uid in enumerate(plan.endpoint_uids):
+        candidate_budget_ms = _candidate_budget(plan, candidate_index, remaining_ms)
+        if candidate_budget_ms <= 0:
+            return SmokeCheck(
+                name=SmokeCheckName.CANDIDATE_BUDGET_SIMULATION,
+                ok=False,
+                message=f"candidate budget simulation failed for endpoint uid: {endpoint_uid}",
+            )
+        source = "override" if endpoint_uid in overrides else "base"
+        budgets.append(f"{endpoint_uid}={candidate_budget_ms}:{source}")
+        remaining_ms -= candidate_budget_ms
+        if remaining_ms <= 0 and candidate_index < len(plan.endpoint_uids) - 1:
+            return SmokeCheck(
+                name=SmokeCheckName.CANDIDATE_BUDGET_SIMULATION,
+                ok=False,
+                message="candidate budget simulation exhausted deadline before pool end",
+            )
+    return SmokeCheck(
+        name=SmokeCheckName.CANDIDATE_BUDGET_SIMULATION,
+        ok=True,
+        message="candidate budget simulation passed: " + ",".join(budgets),
+    )
+
+
+def _candidate_budget(plan: InvocationPlan, candidate_index: int, remaining_ms: int) -> int:
+    candidate_budget_ms = _budget_for_uid(plan, plan.endpoint_uids[candidate_index])
+    has_later_candidate = candidate_index < len(plan.endpoint_uids) - 1
+    reserve = (
+        _budget_for_uid(plan, plan.endpoint_uids[candidate_index + 1])
+        if has_later_candidate and plan.effective_config.protect_last_eligible
+        else 0
+    )
+    available_ms = max(1, remaining_ms - reserve)
+    return min(candidate_budget_ms, available_ms)
+
+
+def _budget_for_uid(plan: InvocationPlan, endpoint_uid: str) -> int:
+    overrides = dict(plan.effective_config.candidate_budget_overrides_ms or ())
+    return overrides.get(endpoint_uid, plan.effective_config.candidate_budget_ms)
 
 
 def _smoke_event(

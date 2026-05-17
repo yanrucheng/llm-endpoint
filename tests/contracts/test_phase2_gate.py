@@ -33,6 +33,7 @@ def test_phase_2_gate_passes_offline_spine() -> None:
         SmokeCheckName.CONFIG_VALIDATION,
         SmokeCheckName.REGISTRY_BUILD,
         SmokeCheckName.INVOCATION_PLANNING,
+        SmokeCheckName.CANDIDATE_BUDGET_SIMULATION,
         SmokeCheckName.TELEMETRY_REDACTION,
     }
     assert report.plan.endpoint_uids == ("primary", "fallback")
