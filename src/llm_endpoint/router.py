@@ -319,14 +319,25 @@ def _should_skip_suppressed(
 
 
 def _candidate_budget(plan: InvocationPlan, candidate_index: int, remaining_ms: int) -> int:
+    candidate_budget_ms = _budget_for_uid(
+        plan,
+        plan.endpoint_uids[candidate_index],
+    )
     has_later_candidate = candidate_index < len(plan.endpoint_uids) - 1
     reserve = (
-        plan.effective_config.candidate_budget_ms
+        _budget_for_uid(plan, plan.endpoint_uids[candidate_index + 1])
         if has_later_candidate and plan.effective_config.protect_last_eligible
         else 0
     )
     available_ms = max(1, remaining_ms - reserve)
-    return min(plan.effective_config.candidate_budget_ms, available_ms)
+    return min(candidate_budget_ms, available_ms)
+
+
+def _budget_for_uid(plan: InvocationPlan, endpoint_uid: str) -> int:
+    overrides = plan.effective_config.candidate_budget_overrides_ms
+    if overrides is None:
+        return plan.effective_config.candidate_budget_ms
+    return dict(overrides).get(endpoint_uid, plan.effective_config.candidate_budget_ms)
 
 
 def _terminal_result(

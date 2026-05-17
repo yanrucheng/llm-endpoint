@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from llm_endpoint.adapters import (
     FakeProviderAdapter,
     ProviderAdapter,
@@ -207,6 +209,103 @@ def test_pool_exhaustion_is_typed_failure() -> None:
     assert result.telemetry[-1].family is TelemetryEventFamily.POOL_EXHAUSTED
 
 
+def test_per_uid_budget_overrides_apply_and_fallback_to_base() -> None:
+    registry = build_registry(
+        _config(
+            max_attempts=2,
+            candidate_budget_overrides_ms={"primary": 6_000},
+            protect_last_eligible=False,
+        )
+    )
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_failure(
+                    kind=ProviderOutcomeKind.TIMEOUT,
+                    endpoint_uid="primary",
+                    elapsed_ms=500,
+                    failure_code=FailureCode.LOCAL_CANDIDATE_TIMEOUT,
+                ),
+            ),
+            "fallback": (
+                provider_success(endpoint_uid="fallback", elapsed_ms=100, content="ok"),
+            ),
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters=_adapter_map(adapter),
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+    )
+
+    assert isinstance(result.terminal_result, PlainTextResult)
+    assert [trace.endpoint_uid for trace in result.attempt_traces] == ["primary", "fallback"]
+    assert [trace.candidate_budget_ms for trace in result.attempt_traces] == [6_000, 4_000]
+
+
+def test_protect_last_eligible_reserves_next_candidate_override() -> None:
+    registry = build_registry(
+        _config(
+            max_attempts=1,
+            candidate_budget_overrides_ms={"primary": 6_000, "fallback": 7_000},
+            protect_last_eligible=True,
+        )
+    )
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_success(endpoint_uid="primary", elapsed_ms=100, content="ok"),
+            ),
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters=_adapter_map(adapter),
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+    )
+
+    assert isinstance(result.terminal_result, PlainTextResult)
+    assert result.attempt_traces[0].endpoint_uid == "primary"
+    assert result.attempt_traces[0].candidate_budget_ms == 3_000
+
+
+def test_late_response_discard_uses_per_uid_budget() -> None:
+    registry = build_registry(
+        _config(
+            max_attempts=1,
+            candidate_budget_ms=6_000,
+            candidate_budget_overrides_ms={"primary": 4_500},
+            protect_last_eligible=False,
+        )
+    )
+    plan = _plan(registry)
+    adapter = FakeProviderAdapter(
+        {
+            "primary": (
+                provider_success(endpoint_uid="primary", elapsed_ms=5_000, content="too late"),
+            ),
+        }
+    )
+
+    result = route_invocation(
+        plan=plan,
+        registry=registry,
+        adapters=_adapter_map(adapter),
+        secret_resolver=lambda ref: resolved_secret(ref, "credential-value"),
+    )
+
+    assert isinstance(result.terminal_result, TypedFailure)
+    assert result.terminal_result.code is FailureCode.LATE_RESPONSE_DISCARDED
+    assert result.attempt_traces[0].candidate_budget_ms == 4_500
+    assert result.telemetry[1].family is TelemetryEventFamily.LATE_RESPONSE_DISCARDED
+
+
 def _plan(registry: Registry) -> InvocationPlan:
     result = invoke_plan(
         request=InvocationRequest(
@@ -226,7 +325,13 @@ def _adapter_map(adapter: ProviderAdapter) -> dict[ProviderFormat | str, Provide
     return {ProviderFormat.FAKE: adapter}
 
 
-def _config(max_attempts: int) -> LLMEndpointConfig:
+def _config(
+    max_attempts: int,
+    *,
+    candidate_budget_ms: int = 4_000,
+    candidate_budget_overrides_ms: Mapping[str, int] | None = None,
+    protect_last_eligible: bool = True,
+) -> LLMEndpointConfig:
     return LLMEndpointConfig(
         endpoints=(
             EndpointConfig(
@@ -251,8 +356,9 @@ def _config(max_attempts: int) -> LLMEndpointConfig:
                 ref="draft-policy",
                 deadline_ms=10_000,
                 max_output_tokens=1_024,
-                candidate_budget_ms=4_000,
-                protect_last_eligible=True,
+                candidate_budget_ms=candidate_budget_ms,
+                candidate_budget_overrides_ms=candidate_budget_overrides_ms,
+                protect_last_eligible=protect_last_eligible,
                 structured_output_mode=StructuredOutputMode.NONE,
                 retry_policy=RetryPolicy(max_attempts=max_attempts),
             ),
