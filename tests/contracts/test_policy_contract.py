@@ -93,6 +93,41 @@ def test_policy_fingerprint_changes_with_candidate_budget_overrides() -> None:
     assert base.policy_fingerprint != overridden.policy_fingerprint
 
 
+def test_policy_fingerprint_is_stable_when_candidate_budget_overrides_are_added_or_removed() -> None:
+    base = resolve_policy(
+        config=_config(),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-base-stable",
+    )
+    equivalent_override_a = resolve_policy(
+        config=_config(candidate_budget_overrides_ms={"primary": 6_000, "fallback": 2_500}),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-override-a",
+    )
+    equivalent_override_b = resolve_policy(
+        config=_config(candidate_budget_overrides_ms={"fallback": 2_500, "primary": 6_000}),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-override-b",
+    )
+    removed = resolve_policy(
+        config=_config(candidate_budget_overrides_ms=None),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-removed",
+    )
+
+    assert isinstance(base, PolicyResolution)
+    assert isinstance(equivalent_override_a, PolicyResolution)
+    assert isinstance(equivalent_override_b, PolicyResolution)
+    assert isinstance(removed, PolicyResolution)
+    assert equivalent_override_a.policy_fingerprint == equivalent_override_b.policy_fingerprint
+    assert equivalent_override_a.policy_fingerprint != base.policy_fingerprint
+    assert removed.policy_fingerprint == base.policy_fingerprint
+
+
 def test_policy_override_requires_policy_permission() -> None:
     result = resolve_policy(
         config=_config(allow_overrides=False),

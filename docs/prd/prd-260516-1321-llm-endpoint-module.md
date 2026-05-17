@@ -4,7 +4,7 @@ title: "LLM Endpoint Module - Standalone V1 Product Contract"
 type: prd
 status: draft
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-17
 parent: "index-prd"
 depends-on: []
 superseded-by: ""
@@ -655,6 +655,9 @@ It must not include raw prompts, raw responses, secrets, unredacted tool args, o
 17. Nightfall call sites migrate directly to canonical invocation without a module compatibility facade.
 18. V1 public surfaces are documented, versioned for fixture identity, and governed by Zero BC before production release.
 19. Nightfall-specific examples remain examples only; removing them does not break the module core.
+20. Per-UID candidate budget overrides are configurable through `OperationRuntimePolicy`; the router applies matching per-candidate budgets instead of uniform flat allocation when overrides are present.
+21. The README documents all public telemetry event families with stable names.
+22. The README demonstrates `reasoning_mode` usage in the quick-start policy example.
 
 ## Output & Errors
 
@@ -811,6 +814,7 @@ The downstream technical design should make these V1 decisions explicit:
 
 | Date | Change |
 |---|---|
+| 2026-05-17 | Hardened per-UID candidate budget requirement: the existing "per-family or per-UID" budget language (Section 3, Design Decisions) now requires explicit config-level `candidate_budget_overrides_ms` keyed by endpoint UID in the public `OperationRuntimePolicy` schema. Also added explicit acceptance criteria for README documentation of telemetry event families and reasoning_mode visibility. Source: `260517-0941-llm-endpoint-expectation-mismatch` eval from Nightfall adoption review. |
 | 2026-05-16 | Applied Zero BC policy: removed migration adapter as a V1 product surface, made direct API migration mandatory, and prohibited compatibility shims before production release. |
 | 2026-05-16 | Incorporated additional V1 feedback from `260516-1301`: split V1 into Core, Migration Hardening, and Operator Add-Ons; cleaned config precedence; defined schema resolver expectations; clarified endpoint suppression as a routing skip reason; added deterministic role-health semantics; analyzed a migration facade later removed by Zero BC; and added `llm.pool.no_eligible_candidate`. |
 | 2026-05-16 | Incorporated feedback from the two module review sessions: converted the document from broad target contract to pragmatic V1 product contract, removed speculative extension section, added strict V1 scope, explicit non-V1 scope, fake providers, contract tests, config precedence, rollout controls, endpoint suppression, cost/token telemetry, async/cancellation, streaming boundary, role health, and debug replay artifacts. |
