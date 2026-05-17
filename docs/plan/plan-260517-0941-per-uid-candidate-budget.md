@@ -2,7 +2,7 @@
 id: "plan-260517-0941-per-uid-candidate-budget"
 title: "Per-UID Candidate Budget Overrides And README Contract Hardening"
 type: plan
-status: ready
+status: completed
 created: 2026-05-17
 updated: 2026-05-17
 parent: "design-260517-0941-per-uid-candidate-budget"
@@ -126,6 +126,9 @@ Track B: README Contract Hardening (docs)
 **Gate:** README quick-start example runs without import or type errors against installed module.
 
 ## Evidence And Completion Criteria
+
+**Completion evidence:** Full suite verified on 2026-05-17 with `uv run pytest tests/ -q`:
+`112 passed in 0.19s`.
 
 | Criterion | Proof |
 |---|---|
