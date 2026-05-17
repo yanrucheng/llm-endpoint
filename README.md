@@ -121,6 +121,7 @@ from llm_endpoint import (
     OperationConfig,
     OperationRuntimePolicy,
     ProviderFormat,
+    ReasoningMode,
     RoleConfig,
     StructuredOutputMode,
 )
@@ -157,7 +158,9 @@ config = LLMEndpointConfig(
             ref="draft-policy",
             deadline_ms=10_000,
             max_output_tokens=1_024,
+            reasoning_mode=ReasoningMode.LOW,
             candidate_budget_ms=4_000,
+            candidate_budget_overrides_ms={"primary": 6_000},
             protect_last_eligible=True,
             structured_output_mode=StructuredOutputMode.NONE,
         ),
@@ -340,6 +343,29 @@ def resolve_schema(ref: str) -> SchemaResolution:
         validate=lambda value: bool(value.get("answer")),
     )
 ```
+
+## Telemetry Event Families
+
+Telemetry event family names are part of the public surface. Under the pre-V1
+Zero Backward Compatibility policy, consumers must pin exact versions and treat
+event-family changes as explicit contract replacements.
+
+| Family | When emitted |
+|---|---|
+| `llm.registry.validated` | Endpoint configuration validation completes. |
+| `llm.policy.resolved` | Operation runtime policy resolves with provenance. |
+| `llm.role.health` | Role health is evaluated or queried. |
+| `llm.pool.attempt` | A candidate attempt starts or is recorded. |
+| `llm.success` | An invocation returns a typed or plain-text success. |
+| `llm.failure` | An invocation returns a normalized typed failure. |
+| `llm.pool.exhausted` | All eligible candidates fail or are skipped. |
+| `llm.deadline.exceeded` | The operation deadline expires. |
+| `llm.cancellation` | Caller cancellation stops the invocation path. |
+| `llm.late_response.discarded` | A provider returns after its local budget and the response is ignored. |
+| `llm.endpoint.suppressed` | A candidate is skipped due to endpoint suppression. |
+| `llm.budget.violation` | Policy or budget validation detects an invariant violation. |
+| `llm.smoke.result` | Offline or opt-in live smoke completes. |
+| `llm.fake_provider.result` | The fake-provider harness produces a deterministic outcome. |
 
 ## Smoke Testing
 
