@@ -375,7 +375,12 @@ def _candidate_budget_simulation_check(plan: InvocationPlan) -> SmokeCheck:
     budgets: list[str] = []
     overrides = dict(plan.effective_config.candidate_budget_overrides_ms or ())
     for candidate_index, endpoint_uid in enumerate(plan.endpoint_uids):
-        candidate_budget_ms = _candidate_budget(plan, candidate_index, remaining_ms)
+        candidate_budget_ms = _candidate_budget(
+            plan,
+            candidate_index,
+            remaining_ms,
+            overrides,
+        )
         if candidate_budget_ms <= 0:
             return SmokeCheck(
                 name=SmokeCheckName.CANDIDATE_BUDGET_SIMULATION,
@@ -398,11 +403,24 @@ def _candidate_budget_simulation_check(plan: InvocationPlan) -> SmokeCheck:
     )
 
 
-def _candidate_budget(plan: InvocationPlan, candidate_index: int, remaining_ms: int) -> int:
-    candidate_budget_ms = _budget_for_uid(plan, plan.endpoint_uids[candidate_index])
+def _candidate_budget(
+    plan: InvocationPlan,
+    candidate_index: int,
+    remaining_ms: int,
+    candidate_budget_overrides: dict[str, int],
+) -> int:
+    candidate_budget_ms = _budget_for_uid(
+        plan,
+        plan.endpoint_uids[candidate_index],
+        candidate_budget_overrides,
+    )
     has_later_candidate = candidate_index < len(plan.endpoint_uids) - 1
     reserve = (
-        _budget_for_uid(plan, plan.endpoint_uids[candidate_index + 1])
+        _budget_for_uid(
+            plan,
+            plan.endpoint_uids[candidate_index + 1],
+            candidate_budget_overrides,
+        )
         if has_later_candidate and plan.effective_config.protect_last_eligible
         else 0
     )
@@ -410,9 +428,12 @@ def _candidate_budget(plan: InvocationPlan, candidate_index: int, remaining_ms: 
     return min(candidate_budget_ms, available_ms)
 
 
-def _budget_for_uid(plan: InvocationPlan, endpoint_uid: str) -> int:
-    overrides = dict(plan.effective_config.candidate_budget_overrides_ms or ())
-    return overrides.get(endpoint_uid, plan.effective_config.candidate_budget_ms)
+def _budget_for_uid(
+    plan: InvocationPlan,
+    endpoint_uid: str,
+    candidate_budget_overrides: dict[str, int],
+) -> int:
+    return candidate_budget_overrides.get(endpoint_uid, plan.effective_config.candidate_budget_ms)
 
 
 def _smoke_event(
