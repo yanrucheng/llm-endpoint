@@ -29,6 +29,7 @@ class PolicyField(StrEnum):
     MAX_OUTPUT_TOKENS = "max_output_tokens"
     REASONING_MODE = "reasoning_mode"
     CANDIDATE_BUDGET_MS = "candidate_budget_ms"
+    CANDIDATE_BUDGET_OVERRIDES_MS = "candidate_budget_overrides_ms"
     PROTECT_LAST_ELIGIBLE = "protect_last_eligible"
     STRUCTURED_OUTPUT_MODE = "structured_output_mode"
     RETRY_CLASS = "retry_class"
@@ -41,6 +42,7 @@ class PolicySource(StrEnum):
     POLICY = "policy"
     CALLER_OVERRIDE = "caller_override"
     DERIVED = "derived"
+    NOT_SET = "not_set"
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +63,7 @@ class EffectiveRuntimeConfig:
     max_output_tokens: int
     reasoning_mode: ReasoningMode
     candidate_budget_ms: int
+    candidate_budget_overrides_ms: tuple[tuple[str, int], ...] | None
     protect_last_eligible: bool
     structured_output_mode: StructuredOutputMode
     retry_class: str
@@ -160,6 +163,9 @@ def resolve_policy(
         policy_fingerprint=fingerprint,
         attributes={
             "config_identity": registry.config_identity,
+            "candidate_budget_overrides_count": str(
+                len(effective.candidate_budget_overrides_ms or ())
+            ),
             "endpoint_count": str(len(resolved_role.endpoint_uids)),
             "policy_resolver_version": POLICY_RESOLVER_VERSION,
         },
@@ -207,11 +213,17 @@ def _effective_config(
     candidate_budget_ms = overrides.candidate_budget_ms or policy.candidate_budget_ms
     if candidate_budget_ms is None:
         candidate_budget_ms = deadline_ms
+    candidate_budget_overrides_ms = (
+        tuple(sorted(policy.candidate_budget_overrides_ms.items()))
+        if policy.candidate_budget_overrides_ms
+        else None
+    )
     return EffectiveRuntimeConfig(
         deadline_ms=deadline_ms,
         max_output_tokens=overrides.max_output_tokens or policy.max_output_tokens,
         reasoning_mode=overrides.reasoning_mode or policy.reasoning_mode,
         candidate_budget_ms=candidate_budget_ms,
+        candidate_budget_overrides_ms=candidate_budget_overrides_ms,
         protect_last_eligible=policy.protect_last_eligible,
         structured_output_mode=policy.structured_output_mode,
         retry_class=policy.retry_policy.retry_class.value,
@@ -245,6 +257,11 @@ def _provenance(
             else PolicySource.POLICY
             if policy.candidate_budget_ms is not None
             else PolicySource.DERIVED
+        ),
+        PolicyField.CANDIDATE_BUDGET_OVERRIDES_MS.value: (
+            PolicySource.POLICY
+            if policy.candidate_budget_overrides_ms is not None
+            else PolicySource.NOT_SET
         ),
         PolicyField.PROTECT_LAST_ELIGIBLE.value: PolicySource.POLICY,
         PolicyField.STRUCTURED_OUTPUT_MODE.value: PolicySource.POLICY,
@@ -284,6 +301,31 @@ def _validate_effective_config(
             operation_ref,
             operation_invocation_id,
         )
+    candidate_budget_overrides = dict(effective.candidate_budget_overrides_ms or ())
+    stale_override_uids = sorted(set(candidate_budget_overrides) - set(endpoint_uids))
+    if stale_override_uids:
+        return _budget_failure(
+            "candidate_budget_overrides_ms contains uid outside resolved endpoint pool: "
+            f"{stale_override_uids[0]}",
+            role,
+            operation_ref,
+            operation_invocation_id,
+        )
+    for override_uid, override_budget_ms in candidate_budget_overrides.items():
+        if override_budget_ms <= 0:
+            return _budget_failure(
+                f"candidate_budget_overrides_ms[{override_uid!r}] must be positive",
+                role,
+                operation_ref,
+                operation_invocation_id,
+            )
+        if override_budget_ms > effective.deadline_ms:
+            return _budget_failure(
+                f"candidate_budget_overrides_ms[{override_uid!r}] exceeds deadline_ms",
+                role,
+                operation_ref,
+                operation_invocation_id,
+            )
     for endpoint_uid in endpoint_uids:
         endpoint = registry.endpoints_by_uid[endpoint_uid]
         profile = capability_catalog.get(endpoint.provider_format, endpoint.model_family)
@@ -312,6 +354,25 @@ def _validate_effective_config(
             return failure(
                 code=FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE,
                 message="deadline_ms exceeds provider hard limit",
+                operation_invocation_id=operation_invocation_id,
+                role=role,
+                operation_ref=operation_ref,
+                endpoint_uid=endpoint_uid,
+            )
+        candidate_budget_ms = candidate_budget_overrides.get(
+            endpoint_uid,
+            effective.candidate_budget_ms,
+        )
+        if (
+            profile.hard_limits.max_deadline_ms is not None
+            and candidate_budget_ms > profile.hard_limits.max_deadline_ms
+        ):
+            return failure(
+                code=FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE,
+                message=(
+                    "candidate budget for endpoint uid "
+                    f"{endpoint_uid!r} exceeds provider hard limit"
+                ),
                 operation_invocation_id=operation_invocation_id,
                 role=role,
                 operation_ref=operation_ref,

@@ -32,13 +32,65 @@ def test_policy_resolution_contract() -> None:
     assert result.endpoint_uids == ("primary", "fallback")
     assert result.effective_config.max_output_tokens == 512
     assert result.effective_config.candidate_budget_ms == 4_000
+    assert result.effective_config.candidate_budget_overrides_ms is None
     assert result.effective_config.protect_last_eligible is True
     assert result.provenance["max_output_tokens"] is PolicySource.CALLER_OVERRIDE
     assert result.provenance["candidate_budget_ms"] is PolicySource.POLICY
+    assert result.provenance["candidate_budget_overrides_ms"] is PolicySource.NOT_SET
     assert result.provenance["protect_last_eligible"] is PolicySource.POLICY
     assert len(result.policy_fingerprint) == 64
     assert result.telemetry.family is TelemetryEventFamily.POLICY_RESOLVED
     assert result.telemetry.context.policy_fingerprint == result.policy_fingerprint
+    assert result.telemetry.attributes["candidate_budget_overrides_count"] == "0"
+
+
+def test_policy_resolution_freezes_candidate_budget_overrides() -> None:
+    result = resolve_policy(
+        config=_config(candidate_budget_overrides_ms={"fallback": 2_500, "primary": 6_000}),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-overrides",
+    )
+
+    assert isinstance(result, PolicyResolution)
+    assert result.effective_config.candidate_budget_overrides_ms == (
+        ("fallback", 2_500),
+        ("primary", 6_000),
+    )
+    assert result.provenance["candidate_budget_overrides_ms"] is PolicySource.POLICY
+    assert result.telemetry.attributes["candidate_budget_overrides_count"] == "2"
+
+
+def test_policy_candidate_budget_overrides_reject_stale_uid() -> None:
+    result = resolve_policy(
+        config=_config(candidate_budget_overrides_ms={"stale": 6_000}),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-stale-override",
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE
+    assert "stale" in result.diagnostics.message
+
+
+def test_policy_fingerprint_changes_with_candidate_budget_overrides() -> None:
+    base = resolve_policy(
+        config=_config(),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-base",
+    )
+    overridden = resolve_policy(
+        config=_config(candidate_budget_overrides_ms={"primary": 6_000}),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-fingerprint-overridden",
+    )
+
+    assert isinstance(base, PolicyResolution)
+    assert isinstance(overridden, PolicyResolution)
+    assert base.policy_fingerprint != overridden.policy_fingerprint
 
 
 def test_policy_override_requires_policy_permission() -> None:
@@ -114,6 +166,7 @@ def _config(
     allow_overrides: bool = False,
     deadline_ms: int = 10_000,
     max_output_tokens: int = 1_024,
+    candidate_budget_overrides_ms: dict[str, int] | None = None,
 ) -> LLMEndpointConfig:
     return LLMEndpointConfig(
         endpoints=(
@@ -142,6 +195,7 @@ def _config(
                 max_output_tokens=max_output_tokens,
                 reasoning_mode=ReasoningMode.MEDIUM,
                 candidate_budget_ms=4_000,
+                candidate_budget_overrides_ms=candidate_budget_overrides_ms,
                 protect_last_eligible=True,
                 structured_output_mode=StructuredOutputMode.JSON_SCHEMA,
                 allow_caller_overrides=allow_overrides,
