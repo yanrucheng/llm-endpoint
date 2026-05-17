@@ -10,6 +10,7 @@ from llm_endpoint.config import (
     RoleConfig,
     StructuredOutputMode,
     build_registry,
+    config_identity,
     resolve_role,
     validate_config,
 )
@@ -284,3 +285,121 @@ def _lifecycle_config(*, model: str, schema_version: str = "v1") -> LLMEndpointC
             ),
         ),
     )
+
+
+# --- T1: candidate_budget_overrides_ms validation ---
+
+
+def _overrides_config(
+    *,
+    overrides: dict[str, int] | None = None,
+    candidate_budget_ms: int | None = 4_000,
+    deadline_ms: int = 10_000,
+) -> LLMEndpointConfig:
+    return LLMEndpointConfig(
+        endpoints=(
+            EndpointConfig(
+                uid="primary",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-primary",
+            ),
+            EndpointConfig(
+                uid="fallback",
+                provider_format=ProviderFormat.FAKE,
+                model_family="fake-family",
+                model="fake-model",
+                credential_ref="secret://fake-fallback",
+            ),
+        ),
+        roles=(
+            RoleConfig(name="writer", pool=EndpointPool(("primary", "fallback"))),
+        ),
+        operations=(OperationConfig(ref="draft", policy_ref="draft-policy"),),
+        policies=(
+            OperationRuntimePolicy(
+                ref="draft-policy",
+                deadline_ms=deadline_ms,
+                max_output_tokens=1_024,
+                candidate_budget_ms=candidate_budget_ms,
+                candidate_budget_overrides_ms=overrides,
+            ),
+        ),
+    )
+
+
+def test_valid_candidate_budget_overrides() -> None:
+    config = _overrides_config(overrides={"primary": 6_000, "fallback": 3_000})
+    report = validate_config(config)
+
+    assert report.ok is True
+    assert report.errors == ()
+
+
+def test_candidate_budget_overrides_none_is_valid() -> None:
+    config = _overrides_config(overrides=None)
+    report = validate_config(config)
+
+    assert report.ok is True
+    assert report.errors == ()
+
+
+def test_candidate_budget_overrides_zero_rejected() -> None:
+    config = _overrides_config(overrides={"primary": 0})
+    report = validate_config(config)
+
+    assert report.ok is False
+    errors = [e for e in report.errors if e.code == ConfigErrorCode.INVALID_CANDIDATE_BUDGET]
+    assert len(errors) == 1
+    assert "'primary'" in errors[0].message
+    assert "positive" in errors[0].message
+
+
+def test_candidate_budget_overrides_negative_rejected() -> None:
+    config = _overrides_config(overrides={"primary": -500})
+    report = validate_config(config)
+
+    assert report.ok is False
+    errors = [e for e in report.errors if e.code == ConfigErrorCode.INVALID_CANDIDATE_BUDGET]
+    assert len(errors) == 1
+    assert "'primary'" in errors[0].message
+    assert "positive" in errors[0].message
+
+
+def test_candidate_budget_overrides_exceeding_deadline_rejected() -> None:
+    config = _overrides_config(overrides={"primary": 15_000}, deadline_ms=10_000)
+    report = validate_config(config)
+
+    assert report.ok is False
+    errors = [e for e in report.errors if e.code == ConfigErrorCode.INVALID_CANDIDATE_BUDGET]
+    assert len(errors) == 1
+    assert "'primary'" in errors[0].message
+    assert "exceeds deadline_ms" in errors[0].message
+
+
+def test_candidate_budget_overrides_equal_to_deadline_is_valid() -> None:
+    config = _overrides_config(overrides={"primary": 10_000}, deadline_ms=10_000)
+    report = validate_config(config)
+
+    assert report.ok is True
+    assert report.errors == ()
+
+
+def test_candidate_budget_overrides_multiple_invalid_entries() -> None:
+    config = _overrides_config(overrides={"primary": -1, "fallback": 20_000}, deadline_ms=10_000)
+    report = validate_config(config)
+
+    assert report.ok is False
+    errors = [e for e in report.errors if e.code == ConfigErrorCode.INVALID_CANDIDATE_BUDGET]
+    assert len(errors) == 2
+
+
+def test_candidate_budget_overrides_included_in_config_identity() -> None:
+    config_without = _overrides_config(overrides=None)
+    config_with = _overrides_config(overrides={"primary": 6_000})
+
+    identity_without = config_identity(config_without)
+    identity_with = config_identity(config_with)
+
+    assert identity_without != identity_with

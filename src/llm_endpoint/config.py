@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -121,6 +122,7 @@ class OperationRuntimePolicy:
     max_output_tokens: int
     reasoning_mode: ReasoningMode = ReasoningMode.DISABLED
     candidate_budget_ms: int | None = None
+    candidate_budget_overrides_ms: Mapping[str, int] | None = None
     protect_last_eligible: bool = False
     structured_output_mode: StructuredOutputMode = StructuredOutputMode.NONE
     allow_caller_overrides: bool = False
@@ -576,6 +578,27 @@ def _validate_policy(
                 "candidate_budget_ms must be omitted or positive",
             )
         )
+    if policy.candidate_budget_overrides_ms is not None:
+        for uid, budget in policy.candidate_budget_overrides_ms.items():
+            override_path = (
+                f"{path}.candidate_budget_overrides_ms[{uid!r}]"
+            )
+            if budget <= 0:
+                errors.append(
+                    _error(
+                        ConfigErrorCode.INVALID_CANDIDATE_BUDGET,
+                        override_path,
+                        f"override budget for {uid!r} must be positive",
+                    )
+                )
+            elif policy.deadline_ms > 0 and budget > policy.deadline_ms:
+                errors.append(
+                    _error(
+                        ConfigErrorCode.INVALID_CANDIDATE_BUDGET,
+                        override_path,
+                        f"override budget for {uid!r} exceeds deadline_ms",
+                    )
+                )
     if policy.retry_policy.max_attempts <= 0:
         errors.append(
             _error(
