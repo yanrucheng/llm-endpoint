@@ -1,4 +1,4 @@
-"""Public no-provider-call invocation planning facade."""
+"""Public no-provider-call invocation planning contract."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from llm_endpoint.telemetry import (
     telemetry_event,
 )
 
-INVOCATION_FACADE_VERSION = "v1"
+INVOCATION_PLANNER_VERSION = "v1"
 
 
 class CancellationToken(Protocol):
@@ -42,7 +42,7 @@ class CancellationToken(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class InvocationRequest:
-    """Canonical direct invocation input accepted by the public facade."""
+    """Canonical direct invocation input accepted by the public API."""
 
     role: str
     operation_ref: str
@@ -72,11 +72,11 @@ class InvocationPlan:
     request_metadata: Mapping[str, str] = field(default_factory=dict)
     cancellation_token: CancellationToken | None = None
     telemetry: tuple[TelemetryEvent, ...] = ()
-    facade_version: str = INVOCATION_FACADE_VERSION
+    planner_version: str = INVOCATION_PLANNER_VERSION
 
     def __post_init__(self) -> None:
-        if self.facade_version != INVOCATION_FACADE_VERSION:
-            raise ValueError("only invocation facade version 'v1' is supported")
+        if self.planner_version != INVOCATION_PLANNER_VERSION:
+            raise ValueError("only invocation planner version 'v1' is supported")
         if not self.operation_invocation_id:
             raise ValueError("operation_invocation_id is required")
         if self.deadline_ms <= 0:
@@ -265,7 +265,7 @@ def _request_overrides(
         )
     deadline_override = request.deadline_ms if request.deadline_ms != policy.deadline_ms else None
     return CallerPolicyOverrides(
-        deadline_ms=base.deadline_ms or deadline_override,
+        deadline_ms=base.deadline_ms if base.deadline_ms is not None else deadline_override,
         max_output_tokens=base.max_output_tokens,
         reasoning_mode=base.reasoning_mode,
         candidate_budget_ms=base.candidate_budget_ms,

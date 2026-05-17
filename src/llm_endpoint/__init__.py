@@ -90,7 +90,7 @@ from llm_endpoint.fixtures import (
     fixtures_by_area,
 )
 from llm_endpoint.invocation import (
-    INVOCATION_FACADE_VERSION,
+    INVOCATION_PLANNER_VERSION,
     CancellationToken,
     InvocationPlan,
     InvocationRequest,
@@ -207,7 +207,7 @@ __all__ = [
     "FAKE_PROVIDER_HARNESS_VERSION",
     "FIXTURE_MANIFEST_VERSION",
     "FORBIDDEN_LEGACY_FIELDS",
-    "INVOCATION_FACADE_VERSION",
+    "INVOCATION_PLANNER_VERSION",
     "LIVE_SMOKE_SAFE_PROMPT",
     "LIVE_SMOKE_VERSION",
     "MIGRATION_READINESS_VERSION",

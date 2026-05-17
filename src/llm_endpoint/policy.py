@@ -209,8 +209,14 @@ def _effective_config(
     policy: OperationRuntimePolicy,
     overrides: CallerPolicyOverrides,
 ) -> EffectiveRuntimeConfig:
-    deadline_ms = overrides.deadline_ms or policy.deadline_ms
-    candidate_budget_ms = overrides.candidate_budget_ms or policy.candidate_budget_ms
+    deadline_ms = (
+        overrides.deadline_ms if overrides.deadline_ms is not None else policy.deadline_ms
+    )
+    candidate_budget_ms = (
+        overrides.candidate_budget_ms
+        if overrides.candidate_budget_ms is not None
+        else policy.candidate_budget_ms
+    )
     if candidate_budget_ms is None:
         candidate_budget_ms = deadline_ms
     candidate_budget_overrides_ms = (
@@ -220,7 +226,11 @@ def _effective_config(
     )
     return EffectiveRuntimeConfig(
         deadline_ms=deadline_ms,
-        max_output_tokens=overrides.max_output_tokens or policy.max_output_tokens,
+        max_output_tokens=(
+            overrides.max_output_tokens
+            if overrides.max_output_tokens is not None
+            else policy.max_output_tokens
+        ),
         reasoning_mode=overrides.reasoning_mode or policy.reasoning_mode,
         candidate_budget_ms=candidate_budget_ms,
         candidate_budget_overrides_ms=candidate_budget_overrides_ms,
@@ -312,6 +322,13 @@ def _validate_effective_config(
             operation_invocation_id,
         )
     for override_uid, override_budget_ms in candidate_budget_overrides.items():
+        if not isinstance(override_budget_ms, int) or isinstance(override_budget_ms, bool):
+            return _budget_failure(
+                f"candidate_budget_overrides_ms[{override_uid!r}] must be an integer",
+                role,
+                operation_ref,
+                operation_invocation_id,
+            )
         if override_budget_ms <= 0:
             return _budget_failure(
                 f"candidate_budget_overrides_ms[{override_uid!r}] must be positive",

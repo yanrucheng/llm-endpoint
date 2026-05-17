@@ -87,12 +87,12 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 | P2C | Runtime Policy Resolver | Runtime owner | Policy precedence, hard-cap enforcement, override validation, effective runtime config provenance, policy fingerprint | 3 | P1 Gate |
 | P2D | Result & Failure Normalizer | Runtime owner | Stable failure construction, retryability classification, safe provider status mapping, terminal outcome consistency | 2 | P1 Gate |
 | P2E | Telemetry Emitter | Observability owner | Registry/policy/invocation event emission, attempt trace skeleton, redaction enforcement, token usage field handling | 2 | P1 Gate |
-| P2F | Public Invocation Facade | API owner | Canonical invocation input validation, operation invocation ID handling, sync/async surface contract, no-provider-call planning path | 2 | P1 Gate |
+| P2F | Public Invocation Planner | API owner | Canonical invocation input validation, operation invocation ID handling, sync/async surface contract, no-provider-call planning path | 2 | P1 Gate |
 | P2G | Offline Smoke API Shell | Test owner | Offline smoke command/API shape, fixture runner, machine-readable result envelope, no-network/no-secret execution boundary | 2 | P1 Gate |
 
 **Gate:** A host can validate config offline, resolve a role and policy, produce effective runtime config provenance, emit redacted validation/policy telemetry, and receive typed failures for invalid inputs without live providers.
 
-**Failure blocker:** Execution components remain blocked if registry, capability, policy, failure, and telemetry contracts are not integrated through the public invocation facade.
+**Failure blocker:** Execution components remain blocked if registry, capability, policy, failure, and telemetry contracts are not integrated through the public invocation planner.
 
 **Gate result:** Passed on 2026-05-16.
 
@@ -103,7 +103,7 @@ Integration between same-phase tracks is verified by the phase gate, not modeled
 | P2C runtime policy resolver | `llm_endpoint.policy.resolve_policy` resolves effective runtime config, provenance, policy fingerprint, override validation, hard-cap enforcement, and redacted `llm.policy.resolved` telemetry. |
 | P2D result/failure normalizer | `llm_endpoint.normalization.normalize_provider_outcome` maps provider outcomes to one public terminal result with stable retryability, failure class, safe provider status, and no raw payload leakage. |
 | P2E telemetry emitter | `llm_endpoint.telemetry.TelemetryEmitter` captures and best-effort forwards redacted registry, policy, failure, and smoke events without corrupting terminal outcomes. |
-| P2F public invocation facade | `llm_endpoint.invocation.invoke_plan` validates canonical direct invocation input, handles operation invocation IDs, resolves registry/policy/schema refs, and returns a no-provider-call `InvocationPlan` or typed failure. |
+| P2F public invocation planner | `llm_endpoint.invocation.invoke_plan` validates canonical direct invocation input, handles operation invocation IDs, resolves registry/policy/schema refs, and returns a no-provider-call `InvocationPlan` or typed failure. |
 | P2G offline smoke API shell | `llm_endpoint.smoke.run_offline_smoke` returns a machine-readable `OfflineSmokeReport` for config, registry, invocation planning, and telemetry checks without network calls or secret resolution. |
 | Zero BC policy | New public surfaces are direct `v1` clean-slate contracts; no version routers, deprecated fields, compatibility adapters, or legacy precedence paths were added. |
 | Quality commands | `uv run ruff check .` -> passed; `uv run pytest tests/contracts` -> `41 passed`. |
@@ -311,7 +311,7 @@ graph LR
 | 2026-05-16 | Archived as completed implementation baseline after all phase gates passed; follow-up PRD compliance remediation moved to a separate plan. |
 | 2026-05-16 | Passed Phase 5 final gate by verifying direct migration, rollout controls, Zero BC release guard, consumer contract pack, adoption guide, optional live smoke, and final quality checks. |
 | 2026-05-16 | Passed Phase 4 gate by verifying plain-text invocation, cancellation and late-response semantics, deterministic fake-provider scenarios, role health, debug replay artifacts, and Zero BC public surface coverage. |
-| 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning facade, offline smoke API shell, and contract coverage. |
+| 2026-05-16 | Passed Phase 2 gate by adding result normalization, telemetry emitter, direct invocation planning, offline smoke API shell, and contract coverage. |
 | 2026-05-16 | Passed Phase 1 gate, added gate evidence, and aligned the plan to Zero BC with no migration facade. |
 | 2026-05-16 | Tightened the plan for true same-phase independence: corrected component count, split dependent execution work into five phases, added config lifecycle, Zero BC guard, revised metrics, and replaced the dependency graph. |
 | 2026-05-16 | Initial development plan derived from technical design. |

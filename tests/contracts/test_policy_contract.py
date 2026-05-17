@@ -93,7 +93,7 @@ def test_policy_fingerprint_changes_with_candidate_budget_overrides() -> None:
     assert base.policy_fingerprint != overridden.policy_fingerprint
 
 
-def test_policy_fingerprint_is_stable_when_candidate_budget_overrides_are_added_or_removed() -> None:
+def test_policy_fingerprint_is_stable_for_override_order_and_removal() -> None:
     base = resolve_policy(
         config=_config(),
         role="writer",
@@ -140,6 +140,20 @@ def test_policy_override_requires_policy_permission() -> None:
     assert isinstance(result, TypedFailure)
     assert result.code is FailureCode.UNSUPPORTED_RUNTIME_KNOB
     assert result.code.value == "llm.endpoint.unsupported_runtime_knob"
+
+
+def test_policy_caller_override_zero_output_budget_fails_closed() -> None:
+    result = resolve_policy(
+        config=_config(allow_overrides=True),
+        role="writer",
+        operation_ref="draft",
+        operation_invocation_id="inv-zero-output-override",
+        caller_overrides=CallerPolicyOverrides(max_output_tokens=0),
+    )
+
+    assert isinstance(result, TypedFailure)
+    assert result.code is FailureCode.CANDIDATE_BUDGET_UNALLOCATABLE
+    assert "max_output_tokens" in result.diagnostics.message
 
 
 def test_policy_hard_cap_violation() -> None:

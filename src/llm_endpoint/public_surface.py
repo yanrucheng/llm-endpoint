@@ -98,7 +98,7 @@ PUBLIC_SURFACES: tuple[PublicSurface, ...] = (
         kind=SurfaceKind.API,
         owner="api-owner",
         version_rule=(
-            "Invocation facade v1 is direct sync API only; no compatibility facade "
+            "Invocation planner v1 is direct sync API only; no compatibility facade "
             "or module-owned async shim."
         ),
         positive_fixture="tests/contracts/test_invocation_contract.py::test_invocation_plan_contract",

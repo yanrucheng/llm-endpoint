@@ -583,7 +583,15 @@ def _validate_policy(
             override_path = (
                 f"{path}.candidate_budget_overrides_ms[{uid!r}]"
             )
-            if budget <= 0:
+            if not isinstance(budget, int) or isinstance(budget, bool):
+                errors.append(
+                    _error(
+                        ConfigErrorCode.INVALID_CANDIDATE_BUDGET,
+                        override_path,
+                        f"override budget for {uid!r} must be an integer",
+                    )
+                )
+            elif budget <= 0:
                 errors.append(
                     _error(
                         ConfigErrorCode.INVALID_CANDIDATE_BUDGET,

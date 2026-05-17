@@ -1,3 +1,5 @@
+from typing import cast
+
 from llm_endpoint.config import (
     ConfigErrorCode,
     EndpointConfig,
@@ -365,6 +367,17 @@ def test_candidate_budget_overrides_negative_rejected() -> None:
     assert len(errors) == 1
     assert "'primary'" in errors[0].message
     assert "positive" in errors[0].message
+
+
+def test_candidate_budget_overrides_non_integer_rejected() -> None:
+    config = _overrides_config(overrides=cast(dict[str, int], {"primary": "6000"}))
+    report = validate_config(config)
+
+    assert report.ok is False
+    errors = [e for e in report.errors if e.code == ConfigErrorCode.INVALID_CANDIDATE_BUDGET]
+    assert len(errors) == 1
+    assert "'primary'" in errors[0].message
+    assert "integer" in errors[0].message
 
 
 def test_candidate_budget_overrides_exceeding_deadline_rejected() -> None:

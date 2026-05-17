@@ -28,7 +28,7 @@ FORBIDDEN_LEGACY_FIELDS = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class DirectMigrationRequest:
-    """Direct-API migration input; legacy facade fields are rejected, not translated."""
+    """Direct-API migration input; legacy provider fields are rejected, not translated."""
 
     request: InvocationRequest
     source_callsite: str
@@ -37,7 +37,7 @@ class DirectMigrationRequest:
 
 @dataclass(frozen=True, slots=True)
 class DirectMigrationReport:
-    """Readiness report for moving a call site to the canonical invocation facade."""
+    """Readiness report for moving a call site to the canonical direct API."""
 
     ok: bool
     source_callsite: str
