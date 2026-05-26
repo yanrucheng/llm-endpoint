@@ -205,6 +205,7 @@ cython_debug/
 #   you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 /.trae/
+.claude/
 
 # Local test LLM endpoint credentials
 config/llm-endpoints.yaml
