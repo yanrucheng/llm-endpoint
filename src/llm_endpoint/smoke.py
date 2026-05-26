@@ -94,7 +94,7 @@ class LiveSmokeReport:
             raise ValueError("only skipped or passed live smoke reports can be ok")
 
 
-type LiveProviderProbe = Callable[[InvocationPlan], ProviderOutcome | TypedFailure]
+LiveProviderProbe = Callable[[InvocationPlan], ProviderOutcome | TypedFailure]
 
 
 def run_offline_smoke(

@@ -1,3 +1,8 @@
+from collections.abc import Callable
+from typing import get_args, get_origin
+
+import llm_endpoint
+from llm_endpoint.adapters import ProviderOutcome
 from llm_endpoint.config import (
     EndpointConfig,
     EndpointPool,
@@ -9,9 +14,21 @@ from llm_endpoint.config import (
     RoleConfig,
     StructuredOutputMode,
 )
-from llm_endpoint.results import FailureCode
-from llm_endpoint.smoke import OfflineSmokeReport, SmokeCheckName, run_offline_smoke
+from llm_endpoint.invocation import InvocationPlan
+from llm_endpoint.results import FailureCode, TypedFailure
+from llm_endpoint.smoke import (
+    LiveProviderProbe,
+    OfflineSmokeReport,
+    SmokeCheckName,
+    run_offline_smoke,
+)
 from llm_endpoint.telemetry import TelemetryEventFamily
+
+
+def test_live_provider_probe_alias_is_public_callable() -> None:
+    assert llm_endpoint.LiveProviderProbe is LiveProviderProbe
+    assert get_origin(LiveProviderProbe) is Callable
+    assert get_args(LiveProviderProbe) == ([InvocationPlan], ProviderOutcome | TypedFailure)
 
 
 def test_offline_smoke_report_contract() -> None:

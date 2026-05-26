@@ -1,5 +1,8 @@
+from typing import get_args
+
 import pytest
 
+import llm_endpoint
 from llm_endpoint.adapters import ProviderOutcomeKind, provider_failure, provider_success
 from llm_endpoint.normalization import normalize_provider_outcome
 from llm_endpoint.results import (
@@ -9,9 +12,15 @@ from llm_endpoint.results import (
     PlainTextResult,
     Retryability,
     StructuredResult,
+    TerminalResult,
     TypedFailure,
     failure,
 )
+
+
+def test_terminal_result_alias_is_public_union() -> None:
+    assert llm_endpoint.TerminalResult is TerminalResult
+    assert set(get_args(TerminalResult)) == {StructuredResult, PlainTextResult, TypedFailure}
 
 
 def test_failure_codes_are_public() -> None:

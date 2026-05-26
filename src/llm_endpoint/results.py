@@ -241,7 +241,7 @@ class PlainTextResult:
             raise ValueError("elapsed_ms must be non-negative")
 
 
-type TerminalResult = StructuredResult | PlainTextResult | TypedFailure
+TerminalResult = StructuredResult | PlainTextResult | TypedFailure
 
 
 def failure(
