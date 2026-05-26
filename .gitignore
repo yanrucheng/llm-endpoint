@@ -227,3 +227,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Upskill local state
+.upskill/
+skill.lock
+skill.toml
